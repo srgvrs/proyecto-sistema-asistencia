@@ -18,6 +18,7 @@ export const toAppUserSummary = (user: User): AppUserSummary => ({
 export const createAppAuth = (collection: "users") => ({
   async currentUser() {
     const token = (await cookies()).get(APP_SESSION_COOKIE)?.value
+    console.log("AUTH token?", !!token)
     if (!token) return null
 
     const payload = await getPayload({ config })
@@ -27,6 +28,7 @@ export const createAppAuth = (collection: "users") => ({
       payload,
       strategyName: "local-jwt",
     })
+    console.log("AUTH user", user?.id, (user as any)?.collection, (user as any)?.role)
     if (!user || user.collection !== collection) return null
     return user as User
   },

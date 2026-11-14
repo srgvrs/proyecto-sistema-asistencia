@@ -13,6 +13,7 @@ export default async function HomePage() {
   const users = currentUser ? await listUsersForDirectivo(currentUser) : []
   const schoolStateResult = currentUser ? await loadSchoolStateAction() : null
   const schoolState: SchoolStateData | null = schoolStateResult?.ok ? schoolStateResult.data : null
+  console.log("PAGE", !!currentUser, schoolStateResult?.ok, schoolState?.students.length ?? null)
   const templates = await payload.find({
     collection: "report-templates",
     limit: 20,

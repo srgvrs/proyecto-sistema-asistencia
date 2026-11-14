@@ -253,6 +253,7 @@ function App({
   const [navigationSearch, setNavigationSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const schoolState = getSchoolStateWithDefaults(initialSchoolState);
+  console.log("APP", initialSchoolState?.students.length ?? null, schoolState.students.length)
   const [records, setRecords, replaceRecords] = useSyncedSchoolSection("attendanceRecords", schoolState.attendanceRecords);
   const [officialLists, , replaceOfficialLists] = useSyncedSchoolSection("officialAttendanceLists", schoolState.officialAttendanceLists);
   const [students, setStudents, replaceStudents] = useSyncedSchoolSection("students", schoolState.students);
