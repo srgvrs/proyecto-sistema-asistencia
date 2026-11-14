@@ -454,7 +454,15 @@ function App({
             <TeacherAttendanceOverview attendance={teacherAttendance} teachers={teachers} />
           )}
           {view === "grupos" && session.role === "Directivo" && (
-            <TeacherGroupManagement teachers={teachers} groups={groups} assignments={teacherGroups} setAssignments={setTeacherGroups} />
+            <TeacherGroupManagement
+              teachers={teachers}
+              groups={groups}
+              assignments={teacherGroups}
+              setAssignments={setTeacherGroups}
+              teacherIds={teacherIds}
+              users={users}
+              onAssignTeacher={handleAssignTeacher}
+            />
           )}
           {view === "catalogo" && session.role === "Directivo" && (
             <GroupStudentManagement
@@ -1743,26 +1751,52 @@ function TeacherGroupManagement({
   groups,
   assignments,
   setAssignments,
+  teacherIds,
+  users,
+  onAssignTeacher,
 }: {
   teachers: TeacherProfile[];
   groups: GroupRef[];
   assignments: Record<string, string[]>;
   setAssignments: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  teacherIds: Record<string, string>;
+  users: AppUserSummary[];
+  onAssignTeacher: (groupId: string, teacherId: string | null) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const allGroups = groups.map((group) => group.name).slice().sort();
   const [selectedGroups, setSelectedGroups] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const assignedCount = Object.values(assignments).reduce((total, groups) => total + groups.length, 0);
+  const docenteUsers = users.filter((user) => user.role === "Docente");
+  const resolveTeacherId = (teacherName: string) =>
+    teacherIds[teacherName] || docenteUsers.find((user) => user.name === teacherName)?.id || "";
 
   const addGroup = (teacher: string) => {
     const group = selectedGroups[teacher] || allGroups.find((option) => !(assignments[teacher] || []).includes(option));
     if (!group) return;
+    const groupId = groups.find((item) => item.name === group)?.id;
+    const teacherId = resolveTeacherId(teacher);
+    if (!groupId || !teacherId) {
+      setError("No se encontró el grupo o el docente en el servidor.");
+      return;
+    }
     requestConfirmation({
       title: "Asignar grupo",
       message: `Se asignará el grupo ${group} a ${teacher}. ¿Deseas continuar?`,
       confirmLabel: "Sí, asignar",
-    }, () => {
+    }, async () => {
+      setPending(true);
+      setError("");
+      setNotice("");
+      const result = await onAssignTeacher(groupId, teacherId);
+      setPending(false);
+      if (!result.ok) {
+        setError(result.error ?? "No fue posible asignar el grupo.");
+        return;
+      }
       setAssignments((current) => ({ ...current, [teacher]: [...(current[teacher] || []), group] }));
       setSelectedGroups((current) => ({ ...current, [teacher]: "" }));
       setNotice(`${group} fue asignado a ${teacher}.`);
@@ -1770,12 +1804,26 @@ function TeacherGroupManagement({
   };
 
   const removeGroup = (teacher: string, group: string) => {
+    const groupId = groups.find((item) => item.name === group)?.id;
+    if (!groupId) {
+      setError("No se encontró el grupo en el servidor.");
+      return;
+    }
     requestConfirmation({
       title: "Retirar grupo asignado",
       message: `Se eliminará la asignación del grupo ${group} para ${teacher}. ¿Deseas continuar?`,
       confirmLabel: "Sí, retirar grupo",
       tone: "danger",
-    }, () => {
+    }, async () => {
+      setPending(true);
+      setError("");
+      setNotice("");
+      const result = await onAssignTeacher(groupId, null);
+      setPending(false);
+      if (!result.ok) {
+        setError(result.error ?? "No fue posible retirar el grupo.");
+        return;
+      }
       setAssignments((current) => ({ ...current, [teacher]: (current[teacher] || []).filter((option) => option !== group) }));
       setNotice(`${group} fue eliminado de las asignaciones de ${teacher}.`);
     });
@@ -1789,6 +1837,7 @@ function TeacherGroupManagement({
         <div className="student-counter"><span>{assignedCount}</span><div><small>ASIGNACIONES ACTIVAS</small><strong>{teachers.length} docentes registrados</strong></div></div>
       </div>
       {notice && <div className="inline-notice assignment-notice"><Icon name="check" /> {notice}</div>}
+      {error && <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>No se pudo actualizar</strong><p>{error}</p></div></div>}
       <div className="teacher-group-grid">
         {teachers.map((teacher) => {
           const teacherGroups = assignments[teacher.name] || [];
@@ -1807,7 +1856,7 @@ function TeacherGroupManagement({
                 <option value="">{unassignedGroups.length ? "Selecciona un grupo" : "Todos los grupos asignados"}</option>
                 {unassignedGroups.map((group) => <option key={group}>{group}</option>)}
               </select>
-              <button className="primary-button" onClick={() => addGroup(teacher.name)} disabled={unassignedGroups.length === 0}><Icon name="plus" size={17} /> Agregar</button>
+              <button className="primary-button" onClick={() => addGroup(teacher.name)} disabled={unassignedGroups.length === 0 || pending}><Icon name="plus" size={17} /> {pending ? "Guardando…" : "Agregar"}</button>
             </div>
           </section>;
         })}

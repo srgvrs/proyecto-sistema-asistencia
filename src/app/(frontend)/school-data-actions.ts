@@ -401,6 +401,32 @@ export async function loadSchoolStateAction(): Promise<
   try {
     const payload = await getPayload({ config })
 
+    const safeFind = async (args: any) => {
+      try {
+        return await payload.find(args)
+      } catch (e) {
+        console.error("FIND FALLÓ", args.collection, (e as any)?.message)
+        return { docs: [], totalDocs: 0 } as any
+      }
+    }
+
+    const teachersQuery = user.role === "Docente"
+      ? {
+          collection: "users" as const,
+          where: { id: { equals: user.id } },
+          limit: 1,
+          sort: "name",
+          overrideAccess: true,
+        }
+      : {
+          collection: "users" as const,
+          where: { role: { equals: "Docente" } },
+          limit: 500,
+          sort: "name",
+          overrideAccess: false,
+          user,
+        }
+
     const [
       groupsResult,
       studentsResult,
@@ -411,21 +437,14 @@ export async function loadSchoolStateAction(): Promise<
       teacherAttendanceResult,
       teacherJustificationsResult,
     ] = await Promise.all([
-      payload.find({ collection: "groups", limit: 200, sort: "name", overrideAccess: false, user }),
-      payload.find({ collection: "students", limit: 2000, sort: "lastName", overrideAccess: false, user }),
-      payload.find({ collection: "attendance", limit: 5000, sort: "-date", overrideAccess: false, user }),
-      payload.find({ collection: "visitors", limit: 500, sort: "-entryTime", overrideAccess: false, user }),
-      payload.find({ collection: "official-lists", limit: 200, sort: "-createdAt", overrideAccess: false, user }),
-      payload.find({
-        collection: "users",
-        where: { role: { equals: "Docente" } },
-        limit: 500,
-        sort: "name",
-        overrideAccess: false,
-        user,
-      }),
-      payload.find({ collection: "teacher-attendance", limit: 2000, sort: "-date", overrideAccess: false, user }),
-      payload.find({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
+      safeFind({ collection: "groups", limit: 200, sort: "name", overrideAccess: false, user }),
+      safeFind({ collection: "students", limit: 2000, sort: "lastName", overrideAccess: false, user }),
+      safeFind({ collection: "attendance", limit: 5000, sort: "-date", overrideAccess: false, user }),
+      safeFind({ collection: "visitors", limit: 500, sort: "-entryTime", overrideAccess: false, user }),
+      safeFind({ collection: "official-lists", limit: 200, sort: "-createdAt", overrideAccess: false, user }),
+      safeFind(teachersQuery),
+      safeFind({ collection: "teacher-attendance", limit: 2000, sort: "-date", overrideAccess: false, user }),
+      safeFind({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
     ])
 
     const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: String(group.id), name: group.name }))
@@ -1086,24 +1105,32 @@ export async function assignTeacherToGroupAction(
       }
     }
 
+    const numericGroupId = Number(groupId)
+    if (!Number.isInteger(numericGroupId)) {
+      return { ok: false, error: "El grupo seleccionado no es válido." }
+    }
+    const numericTeacherId = teacherId === null ? null : Number(teacherId)
+    if (numericTeacherId !== null && !Number.isInteger(numericTeacherId)) {
+      return { ok: false, error: "El docente seleccionado no es válido." }
+    }
     const doc = await payload.update({
       collection: "groups",
-      id: groupId as any,
-      data: { teacher: teacherId as any },
+      id: numericGroupId,
+      data: { teacher: numericTeacherId },
       overrideAccess: false,
       user,
-    } as any) as any;
+    })
     return {
       ok: true,
       group: {
         id: String(doc.id),
         name: doc.name,
-        teacherId,
+        teacherId: numericTeacherId === null ? null : String(numericTeacherId),
       },
     }
   } catch (error: any) {
-    console.error("ERROR REAL AL ASIGNAR:", error)
-    return { ok: false, error: error?.message || "Error al asignar." }
+    console.error("ERROR REAL AL ASIGNAR:", JSON.stringify(error?.data?.errors ?? error, null, 2))
+    return { ok: false, error: error?.data?.errors?.[0]?.message || error?.message || "Error al asignar." }
   }
 }
 
