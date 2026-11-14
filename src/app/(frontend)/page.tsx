@@ -23,6 +23,7 @@ export default async function HomePage() {
 
   return (
     <SchoolApp
+      key={`${currentUser?.id ?? "anon"}-${schoolState?.students.length ?? 0}-${schoolState?.groups.length ?? 0}-${schoolState?.teachers.length ?? 0}`}
       initialSession={currentUser ? toAppUserSummary(currentUser) : null}
       initialSchoolState={schoolState}
       initialTemplates={templates.docs as ReportTemplate[]}

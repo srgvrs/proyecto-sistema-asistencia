@@ -226,7 +226,6 @@ function useSyncedSchoolSection<K extends SchoolStateSection>(
   }, []);
 
   const replaceValue = useCallback((nextValue: SchoolStateData[K]) => {
-    console.log("REPLACE pendingSaves=", pendingSaves.current)
     if (pendingSaves.current > 0) return;
     valueRef.current = nextValue;
     setValueRaw(nextValue);
@@ -253,7 +252,6 @@ function App({
   const [navigationSearch, setNavigationSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const schoolState = getSchoolStateWithDefaults(initialSchoolState);
-  console.log("APP", initialSchoolState?.students.length ?? null, schoolState.students.length)
   const [records, setRecords, replaceRecords] = useSyncedSchoolSection("attendanceRecords", schoolState.attendanceRecords);
   const [officialLists, , replaceOfficialLists] = useSyncedSchoolSection("officialAttendanceLists", schoolState.officialAttendanceLists);
   const [students, setStudents, replaceStudents] = useSyncedSchoolSection("students", schoolState.students);
@@ -281,7 +279,6 @@ function App({
 
   const refreshSchoolState = useCallback(async () => {
     const result = await loadSchoolStateAction();
-    console.log("REFRESH", result.ok, result.ok ? result.data.students.length : result.error);
     if (!result.ok) return;
     const nextState = getSchoolStateWithDefaults(result.data);
     replaceRecords(nextState.attendanceRecords);
@@ -293,10 +290,6 @@ function App({
     replaceTeacherGroups(nextState.teacherGroups);
     replaceTeachers(nextState.teachers);
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
-
-  useEffect(() => {
-    void refreshSchoolState();
-  }, [refreshSchoolState]);
 
   const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
     try {
