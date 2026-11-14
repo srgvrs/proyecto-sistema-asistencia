@@ -9,7 +9,11 @@ import { Folders } from './collections/Folders'
 import { Tags } from './collections/Tags'
 import { ReportTemplates } from './collections/ReportTemplates'
 import { Users } from './collections/Users'
-import { SchoolState } from './globals/SchoolState'
+import { Students } from './collections/Students'
+import { Groups } from './collections/Groups'
+import { Attendance } from './collections/Attendance'
+import { Visitors } from './collections/Visitors'
+import { OfficialLists } from './collections/OfficialLists'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -33,8 +37,20 @@ export default buildFigmaConfig({
     fallbackLanguage: 'es',
     supportedLanguages: { 'es': adminLanguage },
   },
-  collections: [Admins, Media, Folders, Tags, ReportTemplates, Users],
-  globals: [SchoolState],
+  collections: [
+    Admins,
+    Media,
+    Folders,
+    Tags,
+    ReportTemplates,
+    Users,
+    Students,
+    Groups,
+    Attendance,
+    Visitors,
+    OfficialLists,
+  ],
+  globals: [],
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
