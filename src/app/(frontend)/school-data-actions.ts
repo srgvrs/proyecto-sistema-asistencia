@@ -1029,11 +1029,11 @@ export async function assignTeacherToGroupAction(
 
     const doc = await payload.update({
       collection: "groups",
-      id: Number(groupId) as any,
-      data: { teacher: teacherId ? (Number(teacherId) as any) : null },
+      id: groupId,
+      data: { teacher: teacherId ?? null },
       overrideAccess: false,
       user,
-    }) as any
+    })
     return {
       ok: true,
       group: {
@@ -1043,8 +1043,8 @@ export async function assignTeacherToGroupAction(
       },
     }
   } catch (error: any) {
-    console.error("Error al asignar docente:", error)
-    return { ok: false, error: error?.message || "No fue posible asignar el docente al grupo." }
+    console.error("ERROR REAL AL ASIGNAR:", error)
+    return { ok: false, error: error?.message || "Error al asignar." }
   }
 }
 
