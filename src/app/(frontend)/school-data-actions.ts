@@ -143,7 +143,7 @@ const mapAttendanceDoc = (doc: AttendanceDoc): AttendanceRecord => ({
 })
 
 const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
-  id: Number(doc.id) || 0,
+  id: doc.id,
   name: doc.name,
   identification: "",
   reason: doc.reason,
@@ -377,7 +377,7 @@ export async function loadSchoolStateAction(): Promise<
       payload.find({ collection: "official-lists", limit: 200, sort: "-createdAt", overrideAccess: false, user }),
     ])
 
-    const groups = (groupsResult.docs as GroupDoc[]).map((group) => group.name)
+    const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: group.id, name: group.name }))
     const studentsByGroup = new Map<string, number>()
     const students: Student[] = (studentsResult.docs as StudentDoc[]).map((doc) => {
       const groupName = getRelationName(doc.group)

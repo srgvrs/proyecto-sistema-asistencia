@@ -10,6 +10,11 @@ export type Student = {
   group: string
 }
 
+export type GroupRef = {
+  id: string
+  name: string
+}
+
 export type AttendanceRecord = {
   studentId: string
   date: string
@@ -36,7 +41,7 @@ export type OfficialAttendanceList = {
 }
 
 export type Visitor = {
-  id: number
+  id: string
   name: string
   identification: string
   reason: string
@@ -65,7 +70,7 @@ export type TeacherProfile = {
 
 export type SchoolStateData = {
   students: Student[]
-  groups: string[]
+  groups: GroupRef[]
   attendanceRecords: AttendanceRecord[]
   officialAttendanceLists: OfficialAttendanceList[]
   visitors: Visitor[]

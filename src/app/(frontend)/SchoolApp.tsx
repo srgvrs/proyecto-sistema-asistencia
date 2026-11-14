@@ -1,27 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import schoolLogo from "./school-logo.png";
 import { createUserAction, loginAction, logoutAction, resetUserPasswordAction } from "./auth-actions";
 import {
-  createAttendanceAction,
   createGroupAction,
   createStudentAction,
   createVisitorAction,
-  deleteAttendanceAction,
-  deleteGroupAction,
-  deleteStudentAction,
   deleteVisitorAction,
   loadSchoolStateAction,
   officializeAttendanceAction,
-  updateAttendanceAction,
-  updateGroupAction,
-  updateStudentAction,
   updateVisitorAction,
 } from "./school-data-actions";
 import type { AppUserSummary, Role } from "@/lib/app-user-types";
-import type { AttendanceRecord, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
+import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes";
 type NavigationItem = { view: View; icon: string; label: string; description: string; keywords: string };
@@ -99,7 +92,11 @@ const initialStudents: Student[] = [
   { id: "C-0901", name: "Romero León Daniela", listNumber: 2, givenNames: "Daniela", paternalSurname: "Romero", maternalSurname: "León", group: "4° C" },
   { id: "C-0902", name: "Navarro Gil Sebastián", listNumber: 1, givenNames: "Sebastián", paternalSurname: "Navarro", maternalSurname: "Gil", group: "4° C" },
 ].sort(compareStudentsByListNumber);
-const initialGroups = ["4° C", "5° A", "6° B"];
+const initialGroups: GroupRef[] = [
+  { id: "group-4c", name: "4° C" },
+  { id: "group-5a", name: "5° A" },
+  { id: "group-6b", name: "6° B" },
+];
 const schoolGrades = ["1", "2", "3", "4", "5", "6"];
 const groupLetters = ["A", "B", "C", "D", "E", "F"];
 
@@ -116,8 +113,8 @@ const initialRecords: AttendanceRecord[] = [
 ];
 
 const initialVisitors: Visitor[] = [
-  { id: 1, name: "Laura Martínez Ríos", identification: "INE · 4821", reason: "Reunión con docente", host: "María González", date: "2026-09-23", entryTime: "09:18", exitTime: "10:05" },
-  { id: 2, name: "Roberto Díaz Campos", identification: "INE · 7390", reason: "Entrega de materiales", host: "Dirección", date: "2026-09-23", entryTime: "10:42", exitTime: null },
+  { id: "visitor-1", name: "Laura Martínez Ríos", identification: "INE · 4821", reason: "Reunión con docente", host: "María González", date: "2026-09-23", entryTime: "09:18", exitTime: "10:05" },
+  { id: "visitor-2", name: "Roberto Díaz Campos", identification: "INE · 7390", reason: "Entrega de materiales", host: "Dirección", date: "2026-09-23", entryTime: "10:42", exitTime: null },
 ];
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -307,18 +304,6 @@ function App({
   const [teacherAttendance, setTeacherAttendance, replaceTeacherAttendance] = useSyncedSchoolSection("teacherAttendance", schoolState.teacherAttendance);
   const [teacherGroups, setTeacherGroups, replaceTeacherGroups] = useSyncedSchoolSection("teacherGroups", schoolState.teacherGroups);
   const [teachers, setTeachers, replaceTeachers] = useSyncedSchoolSection("teachers", schoolState.teachers);
-  void createAttendanceAction;
-  void createGroupAction;
-  void createStudentAction;
-  void createVisitorAction;
-  void deleteAttendanceAction;
-  void deleteGroupAction;
-  void deleteStudentAction;
-  void deleteVisitorAction;
-  void updateAttendanceAction;
-  void updateGroupAction;
-  void updateStudentAction;
-  void updateVisitorAction;
 
   const refreshSchoolState = useCallback(async () => {
     const result = await loadSchoolStateAction();
@@ -477,12 +462,12 @@ function App({
             />
           )}
           {view === "listas-oficiales" && session.role === "Directivo" && (
-            <OfficialListsArchive officialLists={officialLists} groups={groups} />
+            <OfficialListsArchive officialLists={officialLists} groups={groups.map((group) => group.name)} />
           )}
           {view === "alumnos" && session.role === "Docente" && (
             <StudentManagement
               students={students}
-              groups={teacherGroups[session.name] || []}
+              groups={groups.filter((group) => (teacherGroups[session.name] || []).includes(group.name))}
               setStudents={setStudents}
               onDeleteRecords={(studentId) => setRecords((current) => current.filter((record) => record.studentId !== studentId))}
             />
@@ -498,7 +483,7 @@ function App({
             <TeacherAttendanceOverview attendance={teacherAttendance} teachers={teachers} />
           )}
           {view === "grupos" && session.role === "Directivo" && (
-            <TeacherGroupManagement teachers={teachers} groups={groups} assignments={teacherGroups} setAssignments={setTeacherGroups} />
+            <TeacherGroupManagement teachers={teachers} groups={groups.map((group) => group.name)} assignments={teacherGroups} setAssignments={setTeacherGroups} />
           )}
           {view === "catalogo" && session.role === "Directivo" && (
             <GroupStudentManagement
@@ -513,7 +498,7 @@ function App({
             <TeacherManagement
               teachers={teachers}
               setTeachers={setTeachers}
-              groups={groups}
+              groups={groups.map((group) => group.name)}
               assignments={teacherGroups}
               setAssignments={setTeacherGroups}
               onDeleteTeacher={(teacher) => {
@@ -529,7 +514,7 @@ function App({
           {view === "usuarios" && session.role === "Directivo" && (
             <UserManagement users={users} setUsers={setUsers} />
           )}
-          {view === "reportes" && session.role !== "Vigilante de Acceso" && <Reports records={records} students={students} groups={groups} assignments={teacherGroups} allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined} initialTemplates={initialTemplates} />}
+          {view === "reportes" && session.role !== "Vigilante de Acceso" && <Reports records={records} students={students} groups={groups.map((group) => group.name)} assignments={teacherGroups} allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined} initialTemplates={initialTemplates} />}
         </section>
       </main>
     </div>
@@ -837,6 +822,7 @@ function VisitorRegistry({
   setVisitors: React.Dispatch<React.SetStateAction<Visitor[]>>;
   readOnly: boolean;
 }) {
+  const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [identification, setIdentification] = useState("");
   const [reason, setReason] = useState("");
@@ -848,21 +834,29 @@ function VisitorRegistry({
   const registerVisitor = (e: React.FormEvent) => {
     e.preventDefault();
     const now = new Date();
-    setVisitors((current) => [{
-      id: Date.now(),
-      name: name.trim(),
-      identification: identification.trim(),
-      reason: reason.trim(),
-      host: host.trim(),
-      date: now.toISOString().slice(0, 10),
-      entryTime: now.toTimeString().slice(0, 5),
-      exitTime: null,
-    }, ...current]);
-    setName("");
-    setIdentification("");
-    setReason("");
-    setHost("");
-    setNotice("La entrada de la persona externa fue registrada correctamente.");
+    const entryTime = now.toISOString();
+    setNotice("");
+    startTransition(async () => {
+      const result = await createVisitorAction({
+        name: name.trim(),
+        reason: reason.trim(),
+        entryTime,
+      });
+      if (!result.ok) {
+        setNotice(result.error);
+        return;
+      }
+      setVisitors((current) => [{
+        ...result.visitor,
+        identification: identification.trim(),
+        host: host.trim(),
+      }, ...current]);
+      setName("");
+      setIdentification("");
+      setReason("");
+      setHost("");
+      setNotice("La entrada de la persona externa fue registrada correctamente.");
+    });
   };
 
   const registerExit = (visitor: Visitor) => {
@@ -871,8 +865,33 @@ function VisitorRegistry({
       message: `Se registrará la salida de ${visitor.name} con la hora actual. ¿Deseas continuar?`,
       confirmLabel: "Sí, registrar salida",
     }, () => {
-      const time = new Date().toTimeString().slice(0, 5);
-      setVisitors((current) => current.map((item) => item.id === visitor.id ? { ...item, exitTime: time } : item));
+      const exitTime = new Date().toISOString();
+      startTransition(async () => {
+        const result = await updateVisitorAction(visitor.id, { exitTime });
+        if (!result.ok) {
+          setNotice(result.error);
+          return;
+        }
+        setVisitors((current) => current.map((item) => item.id === visitor.id ? { ...item, exitTime: result.visitor.exitTime } : item));
+      });
+    });
+  };
+
+  const handleDeleteVisitor = (visitor: Visitor) => {
+    requestConfirmation({
+      title: "Eliminar registro de visitante",
+      message: `Se eliminará el registro de ${visitor.name}. Esta acción no se puede deshacer.`,
+      confirmLabel: "Sí, eliminar",
+      tone: "danger",
+    }, () => {
+      startTransition(async () => {
+        const result = await deleteVisitorAction(visitor.id);
+        if (!result.ok) {
+          setNotice(result.error);
+          return;
+        }
+        setVisitors((current) => current.filter((item) => item.id !== visitor.id));
+      });
     });
   };
 
@@ -902,7 +921,7 @@ function VisitorRegistry({
             <label>Motivo de la visita<textarea required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Describe brevemente el motivo" rows={3} /></label>
             <label>Persona o área que visita<input required value={host} onChange={(e) => setHost(e.target.value)} placeholder="Nombre del docente o área" /></label>
             <div className="entry-preview"><Icon name="clock" /><div><small>FECHA Y HORA DE ENTRADA</small><strong>Se asignarán automáticamente al confirmar</strong></div></div>
-            <button className="primary-button" type="submit"><Icon name="check" size={18} /> Registrar entrada</button>
+            <button className="primary-button" type="submit" disabled={isPending}><Icon name="check" size={18} /> {isPending ? "Guardando…" : "Registrar entrada"}</button>
           </div>
         </form>}
 
@@ -917,7 +936,12 @@ function VisitorRegistry({
               <div><span className="avatar">{visitor.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><span><strong>{visitor.name}</strong><small>{visitor.identification} · {visitor.reason}</small></span></div>
               <span>{visitor.host}</span>
               <span><strong>{visitor.entryTime}</strong><small>{formatDate(visitor.date)}</small></span>
-              <span>{visitor.exitTime ? <span className="exit-time">{visitor.exitTime}</span> : readOnly ? <span className="inside-status">En plantel</span> : <button className="exit-button" onClick={() => registerExit(visitor)}>Registrar salida</button>}</span>
+              <span>{visitor.exitTime ? <span className="exit-time">{visitor.exitTime}</span> : readOnly ? <span className="inside-status">En plantel</span> : <button className="exit-button" onClick={() => registerExit(visitor)} disabled={isPending}>Registrar salida</button>}</span>
+              {!readOnly && visitor.exitTime && (
+                <button className="delete-button" onClick={() => handleDeleteVisitor(visitor)} disabled={isPending} aria-label={`Eliminar registro de ${visitor.name}`}>
+                  <Icon name="trash" size={16} />
+                </button>
+              )}
             </div>)}
             {filteredVisitors.length === 0 && <div className="empty-state"><Icon name="badge" /><strong>Sin registros</strong><p>No hay personas que coincidan con la búsqueda.</p></div>}
           </div>
@@ -980,11 +1004,12 @@ function StudentManagement({
   onDeleteRecords,
 }: {
   students: Student[];
-  groups: string[];
+  groups: GroupRef[];
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
   onDeleteRecords: (studentId: string) => void;
 }) {
-  const availableGroups = groups.length ? groups : [...new Set(students.map((student) => student.group))].sort();
+  const [isPending, startTransition] = useTransition();
+  const availableGroups = groups.length ? groups.map((group) => group.name) : [...new Set(students.map((student) => student.group))].sort();
   const [givenNames, setGivenNames] = useState("");
   const [paternalSurname, setPaternalSurname] = useState("");
   const [maternalSurname, setMaternalSurname] = useState("");
@@ -1017,29 +1042,39 @@ function StudentManagement({
       setNotice({ type: "error", text: `El número ${listNumber} ya está asignado en ${group}.` });
       return;
     }
-    const student: Student = {
-      id: createStudentId(),
-      name: formatStudentName(paternalSurname, maternalSurname, givenNames),
-      listNumber,
-      givenNames: givenNames.trim(),
-      paternalSurname: paternalSurname.trim(),
-      maternalSurname: maternalSurname.trim(),
-      group,
-    };
+    const groupDoc = groups.find((item) => item.name === group);
+    if (!groupDoc) {
+      setNotice({ type: "error", text: "El grupo seleccionado no existe en el servidor." });
+      return;
+    }
+    const studentName = formatStudentName(paternalSurname, maternalSurname, givenNames);
     requestConfirmation({
       title: "Agregar alumno",
-      message: `Se va a agregar a ${student.name} con el número ${student.listNumber} al grupo ${student.group}. ¿Deseas continuar?`,
+      message: `Se va a agregar a ${studentName} con el número ${listNumber} al grupo ${group}. ¿Deseas continuar?`,
       confirmLabel: "Sí, agregar alumno",
     }, () => {
-      setStudents((current) => {
-        const next = [...current, student].sort(compareStudentsByListNumber);
-        setListNumber(nextListNumber(next, group));
-        return next;
+      setNotice(null);
+      startTransition(async () => {
+        const result = await createStudentAction({
+          firstName: givenNames.trim(),
+          lastName: `${paternalSurname.trim()} ${maternalSurname.trim()}`.trim(),
+          matricula: `${group.replace(/\s+/g, "")}-${listNumber}`,
+          groupId: groupDoc.id,
+        });
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setStudents((current) => {
+          const next = [...current, result.student].sort(compareStudentsByListNumber);
+          setListNumber(nextListNumber(next, group));
+          return next;
+        });
+        setGivenNames("");
+        setPaternalSurname("");
+        setMaternalSurname("");
+        setNotice({ type: "success", text: "El alumno fue agregado correctamente a la lista." });
       });
-      setGivenNames("");
-      setPaternalSurname("");
-      setMaternalSurname("");
-      setNotice({ type: "success", text: "El alumno fue agregado correctamente a la lista." });
     });
   };
 
@@ -1076,7 +1111,7 @@ function StudentManagement({
               <label>Nombre(s)<input required value={givenNames} onChange={(event) => { setGivenNames(event.target.value); setNotice(null); }} placeholder="Ej. Sofía" /></label>
               <label>Grupo<select required value={group} onChange={(event) => { setGroup(event.target.value); setListNumber(nextListNumber(students, event.target.value)); }}>{availableGroups.map((option) => <option key={option}>{option}</option>)}</select></label>
               <label>Número de lista<input required type="number" min="1" max="999" value={listNumber} onChange={(event) => setListNumber(Number(event.target.value))} /></label>
-              <button className="primary-button" type="submit"><Icon name="plus" size={18} /> Agregar alumno</button>
+              <button className="primary-button" type="submit" disabled={isPending}><Icon name="plus" size={18} /> {isPending ? "Guardando…" : "Agregar alumno"}</button>
             </div>
           </form>
           <section className="panel management-list">
@@ -1113,19 +1148,21 @@ function GroupStudentManagement({
   setStudents,
   onDeleteRecords,
 }: {
-  groups: string[];
+  groups: GroupRef[];
   students: Student[];
-  setGroups: React.Dispatch<React.SetStateAction<string[]>>;
+  setGroups: React.Dispatch<React.SetStateAction<GroupRef[]>>;
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
   onDeleteRecords: (studentId: string) => void;
 }) {
+  const [isPending, startTransition] = useTransition();
+  const groupNames = groups.map((item) => item.name);
   const [newGroupGrade, setNewGroupGrade] = useState("1");
   const [newGroupLetter, setNewGroupLetter] = useState("A");
   const [givenNames, setGivenNames] = useState("");
   const [paternalSurname, setPaternalSurname] = useState("");
   const [maternalSurname, setMaternalSurname] = useState("");
-  const [group, setGroup] = useState(groups[0] || "");
-  const [listNumber, setListNumber] = useState(nextListNumber(students, groups[0] || ""));
+  const [group, setGroup] = useState(groupNames[0] || "");
+  const [listNumber, setListNumber] = useState(nextListNumber(students, groupNames[0] || ""));
   const [groupFilter, setGroupFilter] = useState("");
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -1138,7 +1175,7 @@ function GroupStudentManagement({
   const addGroup = (event: React.FormEvent) => {
     event.preventDefault();
     const normalized = `${newGroupGrade}° ${newGroupLetter}`;
-    if (groups.some((item) => item.toLowerCase() === normalized.toLowerCase())) {
+    if (groups.some((item) => item.name.toLowerCase() === normalized.toLowerCase())) {
       setNotice({ type: "error", text: "Ese grupo ya se encuentra registrado." });
       return;
     }
@@ -1147,10 +1184,21 @@ function GroupStudentManagement({
       message: `Se va a crear el grupo ${normalized}. ¿Deseas continuar?`,
       confirmLabel: "Sí, crear grupo",
     }, () => {
-      setGroups((current) => [...current, normalized].sort());
-      setGroup(normalized);
-      setListNumber(1);
-      setNotice({ type: "success", text: `${normalized} fue creado y ya puede recibir alumnos o asignarse a un docente.` });
+      setNotice(null);
+      startTransition(async () => {
+        const result = await createGroupAction({
+          name: normalized,
+          grade: Number(newGroupGrade),
+        });
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setGroups((current) => [...current, { id: result.group.id, name: result.group.name }].sort((a, b) => a.name.localeCompare(b.name)));
+        setGroup(result.group.name);
+        setListNumber(1);
+        setNotice({ type: "success", text: `${result.group.name} fue creado y ya puede recibir alumnos o asignarse a un docente.` });
+      });
     });
   };
 
@@ -1164,29 +1212,39 @@ function GroupStudentManagement({
       setNotice({ type: "error", text: `El número ${listNumber} ya está asignado en ${group}.` });
       return;
     }
-    const student: Student = {
-      id: createStudentId(),
-      name: formatStudentName(paternalSurname, maternalSurname, givenNames),
-      listNumber,
-      givenNames: givenNames.trim(),
-      paternalSurname: paternalSurname.trim(),
-      maternalSurname: maternalSurname.trim(),
-      group,
-    };
+    const groupDoc = groups.find((item) => item.name === group);
+    if (!groupDoc) {
+      setNotice({ type: "error", text: "El grupo seleccionado no existe en el servidor." });
+      return;
+    }
+    const studentName = formatStudentName(paternalSurname, maternalSurname, givenNames);
     requestConfirmation({
       title: "Agregar alumno",
-      message: `Se va a agregar a ${student.name} con el número ${student.listNumber} al grupo ${student.group}. ¿Deseas continuar?`,
+      message: `Se va a agregar a ${studentName} con el número ${listNumber} al grupo ${group}. ¿Deseas continuar?`,
       confirmLabel: "Sí, agregar alumno",
     }, () => {
-      setStudents((current) => {
-        const next = [...current, student].sort(compareStudentsByListNumber);
-        setListNumber(nextListNumber(next, group));
-        return next;
+      setNotice(null);
+      startTransition(async () => {
+        const result = await createStudentAction({
+          firstName: givenNames.trim(),
+          lastName: `${paternalSurname.trim()} ${maternalSurname.trim()}`.trim(),
+          matricula: `${group.replace(/\s+/g, "")}-${listNumber}`,
+          groupId: groupDoc.id,
+        });
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setStudents((current) => {
+          const next = [...current, result.student].sort(compareStudentsByListNumber);
+          setListNumber(nextListNumber(next, group));
+          return next;
+        });
+        setGivenNames("");
+        setPaternalSurname("");
+        setMaternalSurname("");
+        setNotice({ type: "success", text: `El alumno fue agregado correctamente a ${group}.` });
       });
-      setGivenNames("");
-      setPaternalSurname("");
-      setMaternalSurname("");
-      setNotice({ type: "success", text: `El alumno fue agregado correctamente a ${group}.` });
     });
   };
 
@@ -1229,9 +1287,9 @@ function GroupStudentManagement({
             <label>Apellido paterno<input required value={paternalSurname} onChange={(event) => { setPaternalSurname(event.target.value); setNotice(null); }} placeholder="Ej. Hernández" /></label>
             <label>Apellido materno<input required value={maternalSurname} onChange={(event) => { setMaternalSurname(event.target.value); setNotice(null); }} placeholder="Ej. López" /></label>
             <label>Nombre(s)<input required value={givenNames} onChange={(event) => { setGivenNames(event.target.value); setNotice(null); }} placeholder="Ej. Sofía" /></label>
-            <label>Grupo<select required value={group} onChange={(event) => { setGroup(event.target.value); setListNumber(nextListNumber(students, event.target.value)); }}>{groups.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Grupo<select required value={group} onChange={(event) => { setGroup(event.target.value); setListNumber(nextListNumber(students, event.target.value)); }}>{groupNames.map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Número de lista<input required type="number" min="1" max="999" value={listNumber} onChange={(event) => setListNumber(Number(event.target.value))} /></label>
-            <button className="primary-button" type="submit" disabled={!groups.length}><Icon name="plus" size={18} /> Agregar alumno</button>
+            <button className="primary-button" type="submit" disabled={!groups.length || isPending}><Icon name="plus" size={18} /> {isPending ? "Guardando…" : "Agregar alumno"}</button>
           </div>
         </form>
       </div>
@@ -1239,7 +1297,7 @@ function GroupStudentManagement({
         <div className="panel-head catalog-list-head">
           <div><p className="eyebrow">PADRÓN GENERAL</p><h2>Alumnos por grupo</h2></div>
           <div className="catalog-filters">
-            <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="">Todos los grupos</option>{groups.map((option) => <option key={option}>{option}</option>)}</select>
+            <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="">Todos los grupos</option>{groupNames.map((option) => <option key={option}>{option}</option>)}</select>
             <div className="visitor-search"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar alumno…" /></div>
           </div>
         </div>
