@@ -56,7 +56,11 @@ const nextConfig: NextConfig = {
     // browser origin is the public sandbox host while `x-forwarded-host` points
     // at the local dev server. Allow only that exact platform-provisioned host.
     serverActions: {
-      allowedOrigins: makePublicPreviewOrigin ? [makePublicPreviewOrigin] : [],
+      allowedOrigins: [
+        'localhost:3000',
+        '127.0.0.1:3000',
+        ...(makePublicPreviewOrigin ? [makePublicPreviewOrigin] : []),
+      ],
     },
   },
   env: {

@@ -291,9 +291,14 @@ function App({
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
 
   const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
-    const result = await assignTeacherToGroupAction(groupId, teacherId);
-    if (result.ok) await refreshSchoolState();
-    return result;
+    try {
+      const result = await assignTeacherToGroupAction(groupId, teacherId);
+      if (result.ok) await refreshSchoolState();
+      return result;
+    } catch (error) {
+      console.error("Error de red al asignar:", error);
+      return { ok: false, error: "Error de conexión." };
+    }
   }, [refreshSchoolState]);
 
   useEffect(() => {
