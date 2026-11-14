@@ -417,7 +417,6 @@ export async function loadSchoolStateAction(): Promise<
       payload.find({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
     ])
 
-    console.log("DIAGNÓSTICO - Grupos desde DB:", groupsResult.docs.map(g => ({ id: g.id, name: g.name, teacher: g.teacher })));
     const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: String(group.id), name: group.name }))
     const studentsByGroup = new Map<string, number>()
     const students: Student[] = (studentsResult.docs as StudentDoc[]).map((doc) => {
@@ -463,7 +462,6 @@ export async function loadSchoolStateAction(): Promise<
       list.push(group.name)
       teacherGroups[teacherName] = list
     }
-    console.log("DIAGNÓSTICO - teacherGroups construido:", teacherGroups);
 
     const teacherAttendance: TeacherAttendance[] = (teacherAttendanceResult.docs as TeacherAttendanceDoc[]).map((doc, index) => {
       const teacherId = getRelationId(doc.teacher)
@@ -1029,7 +1027,6 @@ export async function assignTeacherToGroupAction(
       }
     }
 
-    console.log("DIAGNÓSTICO - Asignando grupo:", { groupId, teacherId, userId: user.id });
     const doc = await payload.update({
       collection: "groups",
       id: groupId as any,

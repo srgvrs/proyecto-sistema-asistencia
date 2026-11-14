@@ -292,10 +292,8 @@ function App({
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
 
   const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
-    console.log("FRONTEND - handleAssignTeacher llamado con:", { groupId, teacherId });
     try {
       const result = await assignTeacherToGroupAction(groupId, teacherId);
-      console.log("FRONTEND - Respuesta del servidor:", result);
       if (result.ok) await refreshSchoolState();
       return result;
     } catch (error) {
@@ -1490,7 +1488,6 @@ function TeacherManagement({
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const activeTeachers = teachers.filter((teacher) => teacher.status === "Activo").length;
   const docenteUsers = users.filter((user) => user.role === "Docente");
-  console.log("USERS EN TEACHER MANAGEMENT:", users);
   const groupsById = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     for (const group of groups) map[group.id] = group.name;
@@ -1499,11 +1496,9 @@ function TeacherManagement({
   const assignedGroupNames = useMemo(() => new Set(Object.values(assignments).flat()), [assignments]);
 
   const assignTeacher = async () => {
-    console.log("FUNCIÓN ASSIGNTEACHER EJECUTADA", { selectedTeacherId, selectedGroupId });
     if (!selectedTeacherId || !selectedGroupId) return;
     setAssignPending(true);
     setNotice(null);
-    console.log("FRONTEND - Intentando asignar:", { selectedGroupId, selectedTeacherId });
     const result = await onAssignTeacher(selectedGroupId, selectedTeacherId);
     setAssignPending(false);
     if (!result.ok) {
@@ -1678,13 +1673,13 @@ function TeacherManagement({
           <div className="teacher-register-form">
             <div className="teacher-name-fields">
               <label>Docente
-                <select required value={selectedTeacherId} onChange={(event) => { console.log("SELECT DOCENTE", event.target.value); setSelectedTeacherId(event.target.value); setNotice(null); }}>
+                <select required value={selectedTeacherId} onChange={(event) => { setSelectedTeacherId(event.target.value); setNotice(null); }}>
                   <option value="">Selecciona un docente</option>
                   {docenteUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </select>
               </label>
               <label>Grupo
-                <select required value={selectedGroupId} onChange={(event) => { console.log("SELECT GRUPO", event.target.value); setSelectedGroupId(event.target.value); setNotice(null); }}>
+                <select required value={selectedGroupId} onChange={(event) => { setSelectedGroupId(event.target.value); setNotice(null); }}>
                   <option value="">Selecciona un grupo</option>
                   {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                 </select>
@@ -1698,7 +1693,6 @@ function TeacherManagement({
                 className="primary-button"
                 disabled={assignPending}
                 onClick={() => {
-                  console.log("BOTÓN CLICKEADO", { selectedGroupId, selectedTeacherId });
                   if (!selectedTeacherId || !selectedGroupId) {
                     setNotice({ type: "error", text: "Selecciona un docente y un grupo válidos." });
                     return;
