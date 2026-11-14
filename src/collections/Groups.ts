@@ -1,13 +1,7 @@
-import type { Access, CollectionConfig } from "payload"
+import type { Access, CollectionConfig, Validate } from "payload"
 import { isDirectivo, isDocente, isVigilante } from "../access"
 
-const validateTeacherRole = async ({
-  value,
-  req,
-}: {
-  value: unknown
-  req: { payload: { findByID: (args: { collection: "users"; id: string; depth?: number }) => Promise<{ role?: string } | null> } }
-}) => {
+const validateTeacherRole: Validate = async (value, { req }) => {
   if (value === null || value === undefined || value === "") return true
   const id = typeof value === "string" ? value : (value as { id?: string })?.id
   if (!id) return "El docente seleccionado no es válido."
