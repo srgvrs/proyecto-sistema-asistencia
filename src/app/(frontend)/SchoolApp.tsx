@@ -1490,6 +1490,7 @@ function TeacherManagement({
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const activeTeachers = teachers.filter((teacher) => teacher.status === "Activo").length;
   const docenteUsers = users.filter((user) => user.role === "Docente");
+  console.log("USERS EN TEACHER MANAGEMENT:", users);
   const groupsById = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     for (const group of groups) map[group.id] = group.name;
