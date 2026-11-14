@@ -417,6 +417,7 @@ export async function loadSchoolStateAction(): Promise<
       payload.find({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
     ])
 
+    console.log("ESTUDIANTES DESDE DB:", studentsResult.docs.length);
     const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: String(group.id), name: group.name }))
     const studentsByGroup = new Map<string, number>()
     const students: Student[] = (studentsResult.docs as StudentDoc[]).map((doc) => {
@@ -1030,7 +1031,7 @@ export async function assignTeacherToGroupAction(
     const doc = await payload.update({
       collection: "groups",
       id: groupId as any,
-      data: { teacher: teacherId ? (teacherId as any) : null },
+      data: { teacher: teacherId as any },
       overrideAccess: false,
       user,
     } as any) as any;

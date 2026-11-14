@@ -1,19 +1,5 @@
-import type { Access, CollectionConfig, Validate } from "payload"
+import type { Access, CollectionConfig } from "payload"
 import { isDirectivo, isDocente, isVigilante } from "../access"
-
-const validateTeacherRole: Validate = async (value, { req }) => {
-  if (value === null || value === undefined || value === "") return true
-  const id = typeof value === "string" ? value : (value as { id?: string })?.id
-  if (!id) return "El docente seleccionado no es válido."
-  try {
-    const user = await req.payload.findByID({ collection: "users", id, depth: 0 })
-    if (!user) return "El docente seleccionado no existe."
-    if (user.role !== "Docente") return "El usuario asignado debe tener el rol Docente."
-    return true
-  } catch {
-    return "No fue posible validar el docente seleccionado."
-  }
-}
 
 const readGroups: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
@@ -68,7 +54,6 @@ export const Groups: CollectionConfig = {
       filterOptions: {
         role: { equals: "Docente" },
       },
-      validate: validateTeacherRole,
     },
   ],
   versions: false,
