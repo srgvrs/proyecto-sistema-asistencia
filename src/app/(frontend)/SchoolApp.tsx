@@ -4,7 +4,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import schoolLogo from "./school-logo.png";
 import { createUserAction, loginAction, logoutAction, resetUserPasswordAction } from "./auth-actions";
-import { loadSchoolStateAction, officializeAttendanceAction, saveSchoolStateSectionAction } from "./school-data-actions";
+import {
+  createAttendanceAction,
+  createGroupAction,
+  createStudentAction,
+  createVisitorAction,
+  deleteAttendanceAction,
+  deleteGroupAction,
+  deleteStudentAction,
+  deleteVisitorAction,
+  loadSchoolStateAction,
+  officializeAttendanceAction,
+  updateAttendanceAction,
+  updateGroupAction,
+  updateStudentAction,
+  updateVisitorAction,
+} from "./school-data-actions";
 import type { AppUserSummary, Role } from "@/lib/app-user-types";
 import type { AttendanceRecord, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 
@@ -242,12 +257,11 @@ function useConfirmation() {
 }
 
 function useSyncedSchoolSection<K extends SchoolStateSection>(
-  section: K,
+  _section: K,
   initialValue: SchoolStateData[K],
 ): [SchoolStateData[K], React.Dispatch<React.SetStateAction<SchoolStateData[K]>>, (value: SchoolStateData[K]) => void] {
   const [value, setValueRaw] = useState(initialValue);
   const valueRef = useRef(initialValue);
-  const saveQueue = useRef(Promise.resolve());
   const pendingSaves = useRef(0);
 
   const setValue = useCallback<React.Dispatch<React.SetStateAction<SchoolStateData[K]>>>((update) => {
@@ -256,13 +270,7 @@ function useSyncedSchoolSection<K extends SchoolStateSection>(
       : update;
     valueRef.current = nextValue;
     setValueRaw(nextValue);
-    pendingSaves.current += 1;
-    saveQueue.current = saveQueue.current.then(async () => {
-      await saveSchoolStateSectionAction(section, nextValue);
-    }).finally(() => {
-      pendingSaves.current -= 1;
-    });
-  }, [section]);
+  }, []);
 
   const replaceValue = useCallback((nextValue: SchoolStateData[K]) => {
     if (pendingSaves.current > 0) return;
@@ -299,6 +307,18 @@ function App({
   const [teacherAttendance, setTeacherAttendance, replaceTeacherAttendance] = useSyncedSchoolSection("teacherAttendance", schoolState.teacherAttendance);
   const [teacherGroups, setTeacherGroups, replaceTeacherGroups] = useSyncedSchoolSection("teacherGroups", schoolState.teacherGroups);
   const [teachers, setTeachers, replaceTeachers] = useSyncedSchoolSection("teachers", schoolState.teachers);
+  void createAttendanceAction;
+  void createGroupAction;
+  void createStudentAction;
+  void createVisitorAction;
+  void deleteAttendanceAction;
+  void deleteGroupAction;
+  void deleteStudentAction;
+  void deleteVisitorAction;
+  void updateAttendanceAction;
+  void updateGroupAction;
+  void updateStudentAction;
+  void updateVisitorAction;
 
   const refreshSchoolState = useCallback(async () => {
     const result = await loadSchoolStateAction();
