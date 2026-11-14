@@ -291,8 +291,10 @@ function App({
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
 
   const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
+    console.log("FRONTEND - handleAssignTeacher llamado con:", { groupId, teacherId });
     try {
       const result = await assignTeacherToGroupAction(groupId, teacherId);
+      console.log("FRONTEND - Respuesta del servidor:", result);
       if (result.ok) await refreshSchoolState();
       return result;
     } catch (error) {
@@ -1515,6 +1517,7 @@ function TeacherManagement({
     }
     setAssignPending(true);
     setNotice(null);
+    console.log("FRONTEND - Intentando asignar:", { selectedGroupId, selectedTeacherId });
     const result = await onAssignTeacher(selectedGroupId, selectedTeacherId);
     setAssignPending(false);
     if (!result.ok) {
