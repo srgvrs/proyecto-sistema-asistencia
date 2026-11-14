@@ -121,6 +121,11 @@ const getRelationId = (value: any): string => {
   return String(value)
 }
 
+const parseListNumber = (matricula?: string | null): number => {
+  const m = /-(\d+)$/.exec(matricula ?? "")
+  return m ? Number(m[1]) : 0
+}
+
 const getRelationName = (value: number | { id: number; name?: string } | null | undefined): string => {
   if (value === null || value === undefined) return ""
   return typeof value === "number" ? String(value) : value.name || String(value.id)
@@ -430,7 +435,7 @@ export async function loadSchoolStateAction(): Promise<
       const groupName = groupsById.get(getRelationId(doc.group)) || getRelationName(doc.group)
       const nextNumber = (studentsByGroup.get(groupName) || 0) + 1
       studentsByGroup.set(groupName, nextNumber)
-      return mapStudentDoc(doc, nextNumber, groupsById)
+      return mapStudentDoc(doc, parseListNumber(doc.matricula) || nextNumber, groupsById)
     })
     const attendanceRecords = (attendanceResult.docs as AttendanceDoc[]).map(mapAttendanceDoc)
     const visitors = (visitorsResult.docs as VisitorDoc[]).map(mapVisitorDoc)
@@ -482,6 +487,7 @@ export async function loadSchoolStateAction(): Promise<
       }
     })
 
+    console.log("LOAD", { groups: groups.length, students: students.length, teachers: teachers.length })
     return {
       ok: true,
       data: {
@@ -530,7 +536,8 @@ export async function createStudentAction(
       overrideAccess: false,
       user,
     })
-    return { ok: true, student: mapStudentDoc(doc as StudentDoc, 0) }
+    const created = doc as StudentDoc
+    return { ok: true, student: mapStudentDoc(created, parseListNumber(created.matricula)) }
   } catch (error: any) {
     console.error("ERROR AL CREAR ALUMNO:", error)
     return { ok: false, error: error?.message || "No fue posible crear el alumno." }
