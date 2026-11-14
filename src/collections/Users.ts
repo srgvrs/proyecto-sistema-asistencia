@@ -32,7 +32,7 @@ export const Users: CollectionConfig = {
     update: isDirectivo,
   },
   admin: {
-    hidden: true,
+    group: "Control escolar",
     useAsTitle: "username",
   },
   fields: [
