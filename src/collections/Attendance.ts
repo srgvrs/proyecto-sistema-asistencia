@@ -75,6 +75,3 @@ export const Attendance: CollectionConfig = {
   ],
   versions: false,
 }
-
-// Re-exported for potential reuse in other collections
-export { isDocente }

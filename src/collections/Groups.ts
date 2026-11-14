@@ -57,6 +57,3 @@ export const Groups: CollectionConfig = {
   ],
   versions: false,
 }
-
-// Re-exported for potential reuse in other collections
-export { isDocente, isVigilante }

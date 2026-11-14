@@ -83,6 +83,3 @@ export const Visitors: CollectionConfig = {
   ],
   versions: false,
 }
-
-// Re-exported for potential reuse in other collections
-export { isVigilante }
