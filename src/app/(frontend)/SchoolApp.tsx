@@ -5,6 +5,7 @@ import Image from "next/image";
 import schoolLogo from "./school-logo.png";
 import { createUserAction, loginAction, logoutAction, resetUserPasswordAction } from "./auth-actions";
 import {
+  createAttendanceAction,
   createGroupAction,
   createStudentAction,
   createVisitorAction,
@@ -483,7 +484,7 @@ function App({
             <TeacherAttendanceOverview attendance={teacherAttendance} teachers={teachers} />
           )}
           {view === "grupos" && session.role === "Directivo" && (
-            <TeacherGroupManagement teachers={teachers} groups={groups.map((group) => group.name)} assignments={teacherGroups} setAssignments={setTeacherGroups} />
+            <TeacherGroupManagement teachers={teachers} groups={groups} assignments={teacherGroups} setAssignments={setTeacherGroups} />
           )}
           {view === "catalogo" && session.role === "Directivo" && (
             <GroupStudentManagement
@@ -1644,11 +1645,11 @@ function TeacherGroupManagement({
   setAssignments,
 }: {
   teachers: TeacherProfile[];
-  groups: string[];
+  groups: GroupRef[];
   assignments: Record<string, string[]>;
   setAssignments: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
 }) {
-  const allGroups = groups.slice().sort();
+  const allGroups = groups.map((group) => group.name).slice().sort();
   const [selectedGroups, setSelectedGroups] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
   const { requestConfirmation, confirmationDialog } = useConfirmation();
@@ -2014,7 +2015,7 @@ function RollCall({
   const [date, setDate] = useState(todayISO());
   const [draft, setDraft] = useState<Record<string, Status>>({});
   const [notice, setNotice] = useState("");
-  const [pending, setPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   useEffect(() => {
     if (!availableGroups.includes(group)) {
@@ -2036,19 +2037,30 @@ function RollCall({
     || "Presente";
   const setStatus = (id: string, status: Status) => !isOfficial && setDraft((old) => ({ ...old, [id]: status }));
   const saveDraft = () => {
-    setRecords((old) => {
-      const ids = new Set(groupStudents.map((s) => s.id));
-      const rest = old.filter((record) => !(ids.has(record.studentId) && record.date === date && record.source === "Pase de lista"));
-      const additions = groupStudents.map((student) => ({
-        studentId: student.id,
-        date,
-        time: "—",
-        status: statusFor(student),
-        source: "Pase de lista" as const,
-      }));
-      return [...additions, ...rest];
+    if (isOfficial || isPending || !groupStudents.length) return;
+    setNotice("");
+    startTransition(async () => {
+      const results = await Promise.all(
+        groupStudents.map((student) =>
+          createAttendanceAction({ studentId: student.id, date, status: statusFor(student) }),
+        ),
+      );
+      const failed = results.find((result) => !result.ok);
+      if (failed && !failed.ok) {
+        setNotice(failed.error);
+        return;
+      }
+      const savedRecords = results
+        .filter((result): result is { ok: true; record: AttendanceRecord } => result.ok)
+        .map((result) => result.record);
+      setRecords((old) => {
+        const ids = new Set(groupStudents.map((s) => s.id));
+        const rest = old.filter((record) => !(ids.has(record.studentId) && record.date === date && record.source === "Pase de lista"));
+        return [...savedRecords, ...rest];
+      });
+      setDraft({});
+      setNotice("Borrador guardado. Puedes continuar editándolo.");
     });
-    setNotice("Borrador guardado. Puedes continuar editándolo.");
   };
   const absences = groupStudents.filter((s) => statusFor(s) === "Falta").length;
   const officialize = () => {
@@ -2057,22 +2069,22 @@ function RollCall({
       message: `Se cerrará la asistencia del grupo ${group} para el ${formatDate(date)} y ya no podrá modificarse. ¿Deseas continuar?`,
       confirmLabel: "Sí, oficializar",
       tone: "danger",
-    }, async () => {
-      setPending(true);
-      const result = await officializeAttendanceAction({
-        group,
-        date,
-        attendance: groupStudents.map((student) => ({ studentId: student.id, status: statusFor(student) })),
+    }, () => {
+      startTransition(async () => {
+        const result = await officializeAttendanceAction({
+          group,
+          date,
+          attendance: groupStudents.map((student) => ({ studentId: student.id, status: statusFor(student) })),
+        });
+        if (!result.ok) {
+          setNotice(result.error);
+          return;
+        }
+        replaceRecords(result.attendanceRecords);
+        replaceOfficialLists(result.officialAttendanceLists);
+        setDraft({});
+        setNotice("Pase de lista oficializado y agregado al formato mensual. Ya no se permiten modificaciones.");
       });
-      setPending(false);
-      if (!result.ok) {
-        setNotice(result.error);
-        return;
-      }
-      replaceRecords(result.attendanceRecords);
-      replaceOfficialLists(result.officialAttendanceLists);
-      setDraft({});
-      setNotice("Pase de lista oficializado y agregado al formato mensual. Ya no se permiten modificaciones.");
     });
   };
 
@@ -2108,7 +2120,7 @@ function RollCall({
         </div>
         <div className="roll-footer">
           <p><Icon name="alert" size={18} /> Al oficializar, el pase de lista se cerrará definitivamente.</p>
-          <div><button className="secondary-button" disabled={isOfficial || pending} onClick={saveDraft}>Guardar borrador</button><button className="primary-button" disabled={isOfficial || pending || !groupStudents.length} onClick={officialize}><Icon name="lock" size={17} /> {pending ? "Oficializando…" : "Oficializar lista"}</button></div>
+          <div><button className="secondary-button" disabled={isOfficial || isPending} onClick={saveDraft}>{isPending ? "Guardando…" : "Guardar borrador"}</button><button className="primary-button" disabled={isOfficial || isPending || !groupStudents.length} onClick={officialize}><Icon name="lock" size={17} /> {isPending ? "Procesando…" : "Oficializar lista"}</button></div>
         </div>
       </section>
       {officialList && (
