@@ -13,10 +13,10 @@
 - [x] Reescribir school-data-actions.ts con acciones individuales (create, update, delete).
 - [x] Ajustar page.tsx para usar loadSchoolStateAction.
 
-## Fase 1.6: Persistencia de Matriz de Asistencia — 🚧 En Progreso
-- [ ] Agregar campo `marks` (tipo `json`, opcional) a la colección `OfficialLists` en src/collections/OfficialLists.ts.
-- [ ] Actualizar manualmente `src/payload-types.ts` para agregar el campo `marks` a la interfaz `OfficialList`.
-- [ ] Ajustar `officializeAttendanceAction` en school-data-actions.ts para que guarde el objeto de `marks` en el documento de `official-lists`.
+## Fase 1.6: Persistencia de Matriz de Asistencia — ✅ Completada
+- [x] Agregar campo `marks` (tipo `json`, opcional) a la colección `OfficialLists` en src/collections/OfficialLists.ts.
+- [x] Actualizar manualmente `src/payload-types.ts` para agregar el campo `marks` a la interfaz `OfficialList`.
+- [x] Ajustar `officializeAttendanceAction` en school-data-actions.ts para que guarde el objeto de `marks` en el documento de `official-lists`.
 
 ## Fase 1.7: Conectar UI a las Server Actions — ✅ Completada
 - [x] Migrar los componentes de SchoolApp.tsx (StudentManagement, VisitorRegistry, etc.) para que llamen a las nuevas Server Actions en lugar de solo actualizar el estado local.
