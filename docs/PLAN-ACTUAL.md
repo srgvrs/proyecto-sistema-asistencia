@@ -18,8 +18,8 @@
 - [ ] Actualizar manualmente `src/payload-types.ts` para agregar el campo `marks` a la interfaz `OfficialList`.
 - [ ] Ajustar `officializeAttendanceAction` en school-data-actions.ts para que guarde el objeto de `marks` en el documento de `official-lists`.
 
-## Fase 1.7: Conectar UI a las Server Actions — ⏳ Pendiente
-- [ ] Migrar los componentes de SchoolApp.tsx (StudentManagement, VisitorRegistry, etc.) para que llamen a las nuevas Server Actions en lugar de solo actualizar el estado local.
+## Fase 1.7: Conectar UI a las Server Actions — ✅ Completada
+- [x] Migrar los componentes de SchoolApp.tsx (StudentManagement, VisitorRegistry, etc.) para que llamen a las nuevas Server Actions en lugar de solo actualizar el estado local.
 
 ## Fase 1.8: Colecciones Faltantes (Docentes) — ⏳ Pendiente
 - [ ] Crear colecciones `Teachers`, `TeacherGroups` y `TeacherAttendance`.
