@@ -1028,18 +1028,17 @@ export async function assignTeacherToGroupAction(
 
     const doc = await payload.update({
       collection: "groups",
-      id: groupId,
-      data: { teacher: teacherId !== null ? teacherId : null },
+      id: groupId as any,
+      data: { teacher: teacherId ? (teacherId as any) : null },
       overrideAccess: false,
       user,
-    })
-    const group = doc as GroupDoc
+    }) as any
     return {
       ok: true,
       group: {
-        id: String(group.id),
-        name: group.name,
-        teacherId: teacherId !== null ? String(teacherId) : null,
+        id: String(doc.id),
+        name: doc.name,
+        teacherId,
       },
     }
   } catch {
