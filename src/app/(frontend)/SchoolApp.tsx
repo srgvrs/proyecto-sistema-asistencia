@@ -12,6 +12,7 @@ import {
   createTeacherAttendanceAction,
   createTeacherJustificationAction,
   createVisitorAction,
+  deleteTeacherAction,
   deleteTeacherJustificationAction,
   deleteVisitorAction,
   loadSchoolStateAction,
@@ -1511,6 +1512,7 @@ function TeacherManagement({
 
   const assignTeacher = async (event: React.FormEvent) => {
     event.preventDefault();
+    console.log("FORM SUBMIT");
     if (!selectedTeacherId || !selectedGroupId) {
       setNotice({ type: "error", text: "Selecciona un docente y un grupo." });
       return;
@@ -1641,15 +1643,27 @@ function TeacherManagement({
   };
 
   const deleteTeacher = (teacherName: string) => {
+    const teacherId = teacherIds[teacherName];
+    if (!teacherId) {
+      setNotice({ type: "error", text: "No se encontró la cuenta del docente en el servidor." });
+      return;
+    }
     requestConfirmation({
       title: "Eliminar docente definitivamente",
       message: `Se eliminará a ${teacherName}, sus asignaciones de grupo y sus registros de asistencia docente. Esta acción no se puede deshacer.`,
       confirmLabel: "Sí, eliminar definitivamente",
       tone: "danger",
     }, () => {
-      setTeachers((current) => current.filter((teacher) => teacher.name !== teacherName));
-      onDeleteTeacher(teacherName);
-      setNotice({ type: "success", text: `${teacherName} fue eliminado definitivamente del sistema.` });
+      startTransition(async () => {
+        const result = await deleteTeacherAction(teacherId);
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setTeachers((current) => current.filter((teacher) => teacher.name !== teacherName));
+        onDeleteTeacher(teacherName);
+        setNotice({ type: "success", text: `${teacherName} fue eliminado definitivamente del sistema.` });
+      });
     });
   };
 

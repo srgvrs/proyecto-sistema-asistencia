@@ -1051,6 +1051,31 @@ export async function assignTeacherToGroupAction(
   }
 }
 
+export async function deleteTeacherAction(
+  teacherId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede eliminar docentes." }
+  }
+  if (!isString(teacherId) || teacherId.trim() === "") {
+    return { ok: false, error: "El docente seleccionado no es válido." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    await payload.delete({
+      collection: "users",
+      id: teacherId as any,
+      overrideAccess: false,
+      user,
+    } as any)
+    return { ok: true }
+  } catch (error: any) {
+    console.error("ERROR REAL AL ELIMINAR DOCENTE:", error)
+    return { ok: false, error: error?.message || "No fue posible eliminar al docente." }
+  }
+}
+
 export async function updateTeacherEmploymentStatusAction(
   teacherId: string,
   status: "Activo" | "Baja temporal",
