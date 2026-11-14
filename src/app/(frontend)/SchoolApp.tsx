@@ -1704,8 +1704,8 @@ function TeacherManagement({
             <div><p className="eyebrow">DOCENTE</p><h2>{teacher.name}</h2><span className={`staff-status ${teacher.status === "Activo" ? "active" : "inactive"}`}><i></i>{teacher.status}</span>{(assignments[teacher.name] || []).length > 0 && <small className="teacher-assignment-summary">{assignments[teacher.name].join(", ")}</small>}</div>
           </div>
           <div className="teacher-management-actions">
-            <button className={teacher.status === "Activo" ? "temporary-button" : "restore-button"} onClick={() => toggleStatus(teacher)}><Icon name={teacher.status === "Activo" ? "clock" : "check"} size={17} /> {teacher.status === "Activo" ? "Dar de baja temporal" : "Reactivar docente"}</button>
-            <button className="permanent-delete-button" onClick={() => deleteTeacher(teacher.name)}><Icon name="trash" size={17} /> Eliminar definitivamente</button>
+            <button className={teacher.status === "Activo" ? "temporary-button" : "restore-button"} onClick={() => toggleStatus(teacher)} disabled={isPending}><Icon name={teacher.status === "Activo" ? "clock" : "check"} size={17} /> {teacher.status === "Activo" ? "Dar de baja temporal" : "Reactivar docente"}</button>
+            <button className="permanent-delete-button" onClick={() => deleteTeacher(teacher.name)} disabled={isPending}><Icon name="trash" size={17} /> Eliminar definitivamente</button>
           </div>
           <div className="justification-box">
             <div><p className="eyebrow">JUSTIFICAR DÍA</p><span>La fecha aparecerá como justificada en asistencia.</span></div>
