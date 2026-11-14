@@ -140,8 +140,14 @@ const splitStudentName = (firstName: string, lastName: string) => {
 const buildStudentName = (firstName: string, lastName: string) =>
   `${lastName.trim()} ${firstName.trim()}`.replace(/\s+/g, " ").trim()
 
-const mapStudentDoc = (doc: StudentDoc, listNumber: number): Student => {
+const mapStudentDoc = (
+  doc: StudentDoc,
+  listNumber: number,
+  groupsById?: Map<string, string>,
+): Student => {
   const parts = splitStudentName(doc.firstName, doc.lastName)
+  const groupId = getRelationId(doc.group)
+  const groupName = groupsById?.get(groupId) || getRelationName(doc.group)
   return {
     id: String(doc.id),
     name: buildStudentName(doc.firstName, doc.lastName),
@@ -149,7 +155,7 @@ const mapStudentDoc = (doc: StudentDoc, listNumber: number): Student => {
     givenNames: parts.givenNames,
     paternalSurname: parts.paternalSurname,
     maternalSurname: parts.maternalSurname,
-    group: getRelationName(doc.group),
+    group: groupName,
   }
 }
 
@@ -417,14 +423,14 @@ export async function loadSchoolStateAction(): Promise<
       payload.find({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
     ])
 
-    console.log("ESTUDIANTES DESDE DB:", studentsResult.docs.length);
     const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: String(group.id), name: group.name }))
+    const groupsById = new Map<string, string>(groups.map((group) => [group.id, group.name]))
     const studentsByGroup = new Map<string, number>()
     const students: Student[] = (studentsResult.docs as StudentDoc[]).map((doc) => {
-      const groupName = getRelationName(doc.group)
+      const groupName = groupsById.get(getRelationId(doc.group)) || getRelationName(doc.group)
       const nextNumber = (studentsByGroup.get(groupName) || 0) + 1
       studentsByGroup.set(groupName, nextNumber)
-      return mapStudentDoc(doc, nextNumber)
+      return mapStudentDoc(doc, nextNumber, groupsById)
     })
     const attendanceRecords = (attendanceResult.docs as AttendanceDoc[]).map(mapAttendanceDoc)
     const visitors = (visitorsResult.docs as VisitorDoc[]).map(mapVisitorDoc)
@@ -525,8 +531,9 @@ export async function createStudentAction(
       user,
     })
     return { ok: true, student: mapStudentDoc(doc as StudentDoc, 0) }
-  } catch {
-    return { ok: false, error: "No fue posible crear el alumno." }
+  } catch (error: any) {
+    console.error("ERROR AL CREAR ALUMNO:", error)
+    return { ok: false, error: error?.message || "No fue posible crear el alumno." }
   }
 }
 

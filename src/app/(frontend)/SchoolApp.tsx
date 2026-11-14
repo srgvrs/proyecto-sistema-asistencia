@@ -1166,8 +1166,8 @@ function GroupStudentManagement({
   const [givenNames, setGivenNames] = useState("");
   const [paternalSurname, setPaternalSurname] = useState("");
   const [maternalSurname, setMaternalSurname] = useState("");
-  const [group, setGroup] = useState(groupNames[0] || "");
-  const [listNumber, setListNumber] = useState(nextListNumber(students, groupNames[0] || ""));
+  const [group, setGroup] = useState(groups[0]?.id || "");
+  const [listNumber, setListNumber] = useState(nextListNumber(students, groups[0]?.name || ""));
   const [groupFilter, setGroupFilter] = useState("");
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -1200,7 +1200,7 @@ function GroupStudentManagement({
           return;
         }
         setGroups((current) => [...current, { id: result.group.id, name: result.group.name }].sort((a, b) => a.name.localeCompare(b.name)));
-        setGroup(result.group.name);
+        setGroup(result.group.id);
         setListNumber(1);
         setNotice({ type: "success", text: `${result.group.name} fue creado y ya puede recibir alumnos o asignarse a un docente.` });
       });
@@ -1213,19 +1213,19 @@ function GroupStudentManagement({
       setNotice({ type: "error", text: "El número de lista debe ser un entero entre 1 y 999." });
       return;
     }
-    if (!isListNumberAvailable(students, group, listNumber)) {
-      setNotice({ type: "error", text: `El número ${listNumber} ya está asignado en ${group}.` });
-      return;
-    }
-    const groupDoc = groups.find((item) => item.name === group);
+    const groupDoc = groups.find((item) => item.id === group);
     if (!groupDoc) {
       setNotice({ type: "error", text: "El grupo seleccionado no existe en el servidor." });
+      return;
+    }
+    if (!isListNumberAvailable(students, groupDoc.name, listNumber)) {
+      setNotice({ type: "error", text: `El número ${listNumber} ya está asignado en ${groupDoc.name}.` });
       return;
     }
     const studentName = formatStudentName(paternalSurname, maternalSurname, givenNames);
     requestConfirmation({
       title: "Agregar alumno",
-      message: `Se va a agregar a ${studentName} con el número ${listNumber} al grupo ${group}. ¿Deseas continuar?`,
+      message: `Se va a agregar a ${studentName} con el número ${listNumber} al grupo ${groupDoc.name}. ¿Deseas continuar?`,
       confirmLabel: "Sí, agregar alumno",
     }, () => {
       setNotice(null);
@@ -1233,7 +1233,7 @@ function GroupStudentManagement({
         const result = await createStudentAction({
           firstName: givenNames.trim(),
           lastName: `${paternalSurname.trim()} ${maternalSurname.trim()}`.trim(),
-          matricula: `${group.replace(/\s+/g, "")}-${listNumber}`,
+          matricula: `${groupDoc.name.replace(/\s+/g, "")}-${listNumber}`,
           groupId: groupDoc.id,
         });
         if (!result.ok) {
@@ -1242,13 +1242,13 @@ function GroupStudentManagement({
         }
         setStudents((current) => {
           const next = [...current, result.student].sort(compareStudentsByListNumber);
-          setListNumber(nextListNumber(next, group));
+          setListNumber(nextListNumber(next, groupDoc.name));
           return next;
         });
         setGivenNames("");
         setPaternalSurname("");
         setMaternalSurname("");
-        setNotice({ type: "success", text: `El alumno fue agregado correctamente a ${group}.` });
+        setNotice({ type: "success", text: `El alumno fue agregado correctamente a ${groupDoc.name}.` });
       });
     });
   };
@@ -1292,7 +1292,7 @@ function GroupStudentManagement({
             <label>Apellido paterno<input required value={paternalSurname} onChange={(event) => { setPaternalSurname(event.target.value); setNotice(null); }} placeholder="Ej. Hernández" /></label>
             <label>Apellido materno<input required value={maternalSurname} onChange={(event) => { setMaternalSurname(event.target.value); setNotice(null); }} placeholder="Ej. López" /></label>
             <label>Nombre(s)<input required value={givenNames} onChange={(event) => { setGivenNames(event.target.value); setNotice(null); }} placeholder="Ej. Sofía" /></label>
-            <label>Grupo<select required value={group} onChange={(event) => { setGroup(event.target.value); setListNumber(nextListNumber(students, event.target.value)); }}>{groupNames.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Grupo<select required value={group} onChange={(event) => { setGroup(event.target.value); const nextGroup = groups.find((item) => item.id === event.target.value); setListNumber(nextListNumber(students, nextGroup?.name || "")); }}>{groups.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
             <label>Número de lista<input required type="number" min="1" max="999" value={listNumber} onChange={(event) => setListNumber(Number(event.target.value))} /></label>
             <button className="primary-button" type="submit" disabled={!groups.length || isPending}><Icon name="plus" size={18} /> {isPending ? "Guardando…" : "Agregar alumno"}</button>
           </div>
