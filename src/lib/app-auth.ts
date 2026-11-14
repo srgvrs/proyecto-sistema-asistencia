@@ -9,7 +9,7 @@ import type { AppUserSummary } from "@/lib/app-user-types"
 const APP_SESSION_COOKIE = "app-session"
 
 export const toAppUserSummary = (user: User): AppUserSummary => ({
-  id: user.id,
+  id: String(user.id),
   name: user.name,
   role: user.role,
   username: user.username,

@@ -54,75 +54,75 @@ const mapStatusFromCollection = (status: string): Status => {
 }
 
 type StudentDoc = {
-  id: string
+  id: number
   firstName: string
   lastName: string
   matricula: string
-  group: string | { id: string; name: string }
+  group: number | { id: number; name: string }
 }
 
 type GroupDoc = {
-  id: string
+  id: number
   name: string
   grade: number
-  teacher?: string | { id: string; name: string } | null
+  teacher?: number | { id: number; name: string } | null
 }
 
 type AttendanceDoc = {
-  id: string
-  student: string | { id: string }
+  id: number
+  student: number | { id: number }
   date: string
   status: "Presente" | "Ausente" | "Retardo" | "Justificado"
-  registeredBy: string | { id: string }
+  registeredBy: number | { id: number }
 }
 
 type VisitorDoc = {
-  id: string
+  id: number
   name: string
   reason: string
   entryTime: string
   exitTime?: string | null
-  registeredBy: string | { id: string }
+  registeredBy: number | { id: number }
 }
 
 type OfficialListDoc = {
-  id: string
+  id: number
   title: string
-  group: string | { id: string; name: string }
-  file?: string | { id: string; url?: string | null } | null
+  group: number | { id: number; name: string }
+  file?: number | { id: number; url?: string | null } | null
   marks?: Record<string, Record<string, "." | "X">> | null
 }
 
 type TeacherAttendanceDoc = {
-  id: string
-  teacher: string | { id: string; name?: string }
+  id: number
+  teacher: number | { id: number; name?: string }
   date: string
   entryTime: string
   exitTime?: string | null
 }
 
 type TeacherJustificationDoc = {
-  id: string
-  teacher: string | { id: string; name?: string }
+  id: number
+  teacher: number | { id: number; name?: string }
   date: string
   reason?: string | null
 }
 
 type TeacherUserDoc = {
-  id: string
+  id: number
   name: string
   role: "Directivo" | "Docente" | "Vigilante de Acceso"
   employmentStatus?: "Activo" | "Baja temporal" | null
 }
 
-const getRelationId = (value: string | { id: string } | null | undefined): string => {
-  if (!value) return ""
-  return typeof value === "string" ? value : value.id
+const getRelationId = (value: number | { id: number } | null | undefined): string => {
+  if (value === null || value === undefined) return ""
+  return typeof value === "number" ? String(value) : String(value.id)
 }
 
-const getRelationName = (value: string | { id: string; name?: string } | null | undefined): string => {
-  if (!value) return ""
-  return typeof value === "string" ? value : value.name || value.id
+const getRelationName = (value: number | { id: number; name?: string } | null | undefined): string => {
+  if (value === null || value === undefined) return ""
+  return typeof value === "number" ? String(value) : value.name || String(value.id)
 }
 
 const splitStudentName = (firstName: string, lastName: string) => {
@@ -142,7 +142,7 @@ const buildStudentName = (firstName: string, lastName: string) =>
 const mapStudentDoc = (doc: StudentDoc, listNumber: number): Student => {
   const parts = splitStudentName(doc.firstName, doc.lastName)
   return {
-    id: doc.id,
+    id: String(doc.id),
     name: buildStudentName(doc.firstName, doc.lastName),
     listNumber,
     givenNames: parts.givenNames,
@@ -161,7 +161,7 @@ const mapAttendanceDoc = (doc: AttendanceDoc): AttendanceRecord => ({
 })
 
 const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
-  id: doc.id,
+  id: String(doc.id),
   name: doc.name,
   identification: "",
   reason: doc.reason,
@@ -179,7 +179,7 @@ const mapOfficialListDoc = (doc: OfficialListDoc): OfficialAttendanceList => {
     Object.values(marks).flatMap((studentMarks) => Object.keys(studentMarks || {})),
   )].sort()
   return {
-    id: doc.id,
+    id: String(doc.id),
     group: getRelationName(doc.group),
     month: officialDates[0]?.slice(0, 7) || "",
     teacher: "",
@@ -227,7 +227,7 @@ export async function officializeAttendanceAction(
     })
     const groupDoc = groupsResult.docs[0] as GroupDoc | undefined
     if (!groupDoc) return { ok: false, error: "El grupo no existe." }
-    if (getRelationId(groupDoc.teacher) !== user.id) {
+    if (getRelationId(groupDoc.teacher) !== String(user.id)) {
       return { ok: false, error: "El grupo no está asignado a tu cuenta docente." }
     }
 
@@ -244,7 +244,7 @@ export async function officializeAttendanceAction(
 
     const submittedStatuses = new Map(input.attendance.map((item) => [item.studentId, item.status]))
     if (submittedStatuses.size !== groupStudents.length ||
-      groupStudents.some((student) => !submittedStatuses.has(student.id))) {
+      groupStudents.some((student) => !submittedStatuses.has(String(student.id)))) {
       return { ok: false, error: "La lista debe incluir a todos los alumnos del grupo." }
     }
 
@@ -266,9 +266,10 @@ export async function officializeAttendanceAction(
 
     const attendanceRecords: AttendanceRecord[] = []
     for (const student of groupStudents) {
-      const status = submittedStatuses.get(student.id) as Status
+      const studentId = String(student.id)
+      const status = submittedStatuses.get(studentId) as Status
       const collectionStatus = mapStatusToCollection(status)
-      const existing = existingByStudent.get(student.id)
+      const existing = existingByStudent.get(studentId)
       if (existing) {
         await payload.update({
           collection: "attendance",
@@ -291,7 +292,7 @@ export async function officializeAttendanceAction(
         })
       }
       attendanceRecords.push({
-        studentId: student.id,
+        studentId,
         date: input.date,
         time: "—",
         status,
@@ -321,9 +322,10 @@ export async function officializeAttendanceAction(
       : {}
     const marks: Record<string, Record<string, "." | "X">> = { ...existingMarks }
     for (const student of groupStudents) {
-      const status = submittedStatuses.get(student.id) as Status
-      marks[student.id] = {
-        ...(marks[student.id] || {}),
+      const studentId = String(student.id)
+      const status = submittedStatuses.get(studentId) as Status
+      marks[studentId] = {
+        ...(marks[studentId] || {}),
         [input.date]: status === "Falta" ? "X" : ".",
       }
     }
@@ -340,7 +342,7 @@ export async function officializeAttendanceAction(
         overrideAccess: false,
         user,
       })
-      officialListId = (updated as OfficialListDoc).id
+      officialListId = String((updated as OfficialListDoc).id)
     } else {
       const created = await payload.create({
         collection: "official-lists",
@@ -352,7 +354,7 @@ export async function officializeAttendanceAction(
         overrideAccess: false,
         user,
       })
-      officialListId = (created as OfficialListDoc).id
+      officialListId = String((created as OfficialListDoc).id)
     }
 
     const officialAttendanceLists: OfficialAttendanceList[] = [
@@ -363,7 +365,7 @@ export async function officializeAttendanceAction(
         teacher: user.name,
         officialDates,
         students: groupStudents.map((student, index) => ({
-          studentId: student.id,
+          studentId: String(student.id),
           name: buildStudentName(student.firstName, student.lastName),
           listNumber: index + 1,
         })),
@@ -442,7 +444,7 @@ export async function loadSchoolStateAction(): Promise<
         paternalSurname: "",
         maternalSurname: "",
         status: doc.employmentStatus === "Baja temporal" ? "Baja temporal" : "Activo",
-        justifiedDates: (justificationsByTeacher.get(doc.id) || []).sort().reverse(),
+        justifiedDates: (justificationsByTeacher.get(String(doc.id)) || []).sort().reverse(),
       }
     })
 
@@ -450,7 +452,7 @@ export async function loadSchoolStateAction(): Promise<
     for (const group of groupsResult.docs as GroupDoc[]) {
       const teacherId = getRelationId(group.teacher)
       if (!teacherId) continue
-      const teacherDoc = teacherDocs.find((doc) => doc.id === teacherId)
+      const teacherDoc = teacherDocs.find((doc) => String(doc.id) === teacherId)
       if (!teacherDoc) continue
       const list = teacherGroups[teacherDoc.name] || []
       list.push(group.name)
@@ -459,7 +461,7 @@ export async function loadSchoolStateAction(): Promise<
 
     const teacherAttendance: TeacherAttendance[] = (teacherAttendanceResult.docs as TeacherAttendanceDoc[]).map((doc, index) => {
       const teacherId = getRelationId(doc.teacher)
-      const teacherDoc = teacherDocs.find((item) => item.id === teacherId)
+      const teacherDoc = teacherDocs.find((item) => String(item.id) === teacherId)
       return {
         id: index + 1,
         teacher: teacherDoc?.name || getRelationName(doc.teacher),
@@ -512,7 +514,7 @@ export async function createStudentAction(
         firstName: input.firstName.trim(),
         lastName: input.lastName.trim(),
         matricula: input.matricula.trim(),
-        group: input.groupId,
+        group: Number(input.groupId),
       },
       overrideAccess: false,
       user,
@@ -532,11 +534,11 @@ export async function updateStudentAction(
     return { ok: false, error: "No tienes permiso para actualizar alumnos." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
-  const data: Record<string, string> = {}
+  const data: Record<string, string | number> = {}
   if (isString(input.firstName)) data.firstName = input.firstName.trim()
   if (isString(input.lastName)) data.lastName = input.lastName.trim()
   if (isString(input.matricula)) data.matricula = input.matricula.trim()
-  if (isString(input.groupId)) data.group = input.groupId
+  if (isString(input.groupId)) data.group = Number(input.groupId)
   if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
   try {
     const payload = await getPayload({ config })
@@ -593,13 +595,13 @@ export async function createGroupAction(
       data: {
         name: input.name.trim(),
         grade: input.grade,
-        teacher: input.teacherId || undefined,
+        teacher: input.teacherId ? Number(input.teacherId) : undefined,
       },
       overrideAccess: false,
       user,
     })
     const group = doc as GroupDoc
-    return { ok: true, group: { id: group.id, name: group.name, grade: group.grade } }
+    return { ok: true, group: { id: String(group.id), name: group.name, grade: group.grade } }
   } catch {
     return { ok: false, error: "No fue posible crear el grupo." }
   }
@@ -617,7 +619,7 @@ export async function updateGroupAction(
   const data: Record<string, unknown> = {}
   if (isString(input.name)) data.name = input.name.trim()
   if (Number.isInteger(input.grade)) data.grade = input.grade
-  if (input.teacherId !== undefined) data.teacher = input.teacherId || null
+  if (input.teacherId !== undefined) data.teacher = input.teacherId ? Number(input.teacherId) : null
   if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
   try {
     const payload = await getPayload({ config })
@@ -629,7 +631,7 @@ export async function updateGroupAction(
       user,
     })
     const group = doc as GroupDoc
-    return { ok: true, group: { id: group.id, name: group.name, grade: group.grade } }
+    return { ok: true, group: { id: String(group.id), name: group.name, grade: group.grade } }
   } catch {
     return { ok: false, error: "No fue posible actualizar el grupo." }
   }
@@ -673,7 +675,7 @@ export async function createAttendanceAction(
     const doc = await payload.create({
       collection: "attendance",
       data: {
-        student: input.studentId,
+        student: Number(input.studentId),
         date: `${input.date}T00:00:00.000Z`,
         status: mapStatusToCollection(input.status),
         registeredBy: user.id,
@@ -697,7 +699,7 @@ export async function updateAttendanceAction(
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
   const data: Record<string, unknown> = {}
-  if (isString(input.studentId)) data.student = input.studentId
+  if (isString(input.studentId)) data.student = Number(input.studentId)
   if (isISODate(input.date)) data.date = `${input.date}T00:00:00.000Z`
   if (input.status && ["Presente", "Retardo", "Falta"].includes(input.status)) {
     data.status = mapStatusToCollection(input.status)
@@ -844,7 +846,7 @@ export async function createTeacherAttendanceAction(
     const doc = await payload.create({
       collection: "teacher-attendance",
       data: {
-        teacher: input.teacherId,
+        teacher: Number(input.teacherId),
         date: `${input.date}T00:00:00.000Z`,
         entryTime: input.entryTime,
         exitTime: input.exitTime || null,
@@ -931,7 +933,7 @@ export async function createTeacherJustificationAction(
     await payload.create({
       collection: "teacher-justifications",
       data: {
-        teacher: input.teacherId,
+        teacher: Number(input.teacherId),
         date: `${input.date}T00:00:00.000Z`,
         reason: input.reason?.trim() || undefined,
         createdByUser: user.id,
@@ -962,7 +964,7 @@ export async function deleteTeacherJustificationAction(
       collection: "teacher-justifications",
       where: {
         and: [
-          { teacher: { equals: teacherId } },
+          { teacher: { equals: Number(teacherId) } },
           { date: { equals: `${date}T00:00:00.000Z` } },
         ],
       },
@@ -994,7 +996,7 @@ export async function updateTeacherEmploymentStatusAction(
     const payload = await getPayload({ config })
     await payload.update({
       collection: "users",
-      id: teacherId,
+      id: Number(teacherId),
       data: { employmentStatus: status },
       overrideAccess: false,
       user,

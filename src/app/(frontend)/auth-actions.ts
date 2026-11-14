@@ -85,7 +85,7 @@ export async function resetUserPasswordAction(input: {
     const payload = await getPayload({ config })
     await payload.update({
       collection: "users",
-      id: input.userId,
+      id: Number(input.userId),
       data: { password: input.password, sessions: [] },
       overrideAccess: false,
       user: currentUser,
