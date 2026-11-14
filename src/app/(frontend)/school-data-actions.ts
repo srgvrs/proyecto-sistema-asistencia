@@ -981,6 +981,69 @@ export async function deleteTeacherJustificationAction(
   }
 }
 
+export async function assignTeacherToGroupAction(
+  groupId: string,
+  teacherId: string | null,
+): Promise<
+  | { ok: true; group: { id: string; name: string; teacherId: string | null } }
+  | { ok: false; error: string }
+> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede asignar docentes a grupos." }
+  }
+  if (!isString(groupId) || groupId.trim() === "") {
+    return { ok: false, error: "El grupo seleccionado no es válido." }
+  }
+  if (teacherId !== null && (!isString(teacherId) || teacherId.trim() === "")) {
+    return { ok: false, error: "El docente seleccionado no es válido." }
+  }
+  try {
+    const payload = await getPayload({ config })
+
+    if (teacherId !== null) {
+      const teacherResult = await payload.find({
+        collection: "users",
+        where: {
+          and: [
+            { id: { equals: Number(teacherId) } },
+            { role: { equals: "Docente" } },
+          ],
+        },
+        limit: 1,
+        overrideAccess: false,
+        user,
+      })
+      const teacherDoc = teacherResult.docs[0] as TeacherUserDoc | undefined
+      if (!teacherDoc) {
+        return { ok: false, error: "El docente seleccionado no existe." }
+      }
+      if (teacherDoc.employmentStatus === "Baja temporal") {
+        return { ok: false, error: "No puedes asignar grupos a un docente con baja temporal." }
+      }
+    }
+
+    const doc = await payload.update({
+      collection: "groups",
+      id: Number(groupId),
+      data: { teacher: teacherId !== null ? Number(teacherId) : null },
+      overrideAccess: false,
+      user,
+    })
+    const group = doc as GroupDoc
+    return {
+      ok: true,
+      group: {
+        id: String(group.id),
+        name: group.name,
+        teacherId: teacherId !== null ? String(teacherId) : null,
+      },
+    }
+  } catch {
+    return { ok: false, error: "No fue posible asignar el docente al grupo." }
+  }
+}
+
 export async function updateTeacherEmploymentStatusAction(
   teacherId: string,
   status: "Activo" | "Baja temporal",

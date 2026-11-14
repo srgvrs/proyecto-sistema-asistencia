@@ -5,6 +5,7 @@ import Image from "next/image";
 import schoolLogo from "./school-logo.png";
 import { createUserAction, loginAction, logoutAction, resetUserPasswordAction } from "./auth-actions";
 import {
+  assignTeacherToGroupAction,
   createAttendanceAction,
   createGroupAction,
   createStudentAction,
@@ -318,6 +319,21 @@ function App({
     return map;
   }, [users]);
 
+  const groupTeacherMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const group of groups) {
+      const teacherName = Object.entries(teacherGroups).find(([, list]) => list.includes(group.name))?.[0];
+      if (teacherName) map[group.id] = teacherName;
+    }
+    return map;
+  }, [groups, teacherGroups]);
+
+  const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
+    const result = await assignTeacherToGroupAction(groupId, teacherId);
+    if (result.ok) await refreshSchoolState();
+    return result;
+  }, [refreshSchoolState]);
+
   const refreshSchoolState = useCallback(async () => {
     const result = await loadSchoolStateAction();
     if (!result.ok) return;
@@ -505,6 +521,7 @@ function App({
               students={students}
               setGroups={setGroups}
               setStudents={setStudents}
+              groupTeacherMap={groupTeacherMap}
               onDeleteRecords={(studentId) => setRecords((current) => current.filter((record) => record.studentId !== studentId))}
             />
           )}
@@ -512,10 +529,12 @@ function App({
             <TeacherManagement
               teachers={teachers}
               setTeachers={setTeachers}
-              groups={groups.map((group) => group.name)}
+              groups={groups}
               assignments={teacherGroups}
               setAssignments={setTeacherGroups}
               teacherIds={teacherIds}
+              users={users}
+              onAssignTeacher={handleAssignTeacher}
               onDeleteTeacher={(teacher) => {
                 setTeacherGroups((current) => {
                   const next = { ...current };
@@ -1188,14 +1207,17 @@ function GroupStudentManagement({
   students,
   setGroups,
   setStudents,
+  groupTeacherMap,
   onDeleteRecords,
 }: {
   groups: GroupRef[];
   students: Student[];
   setGroups: React.Dispatch<React.SetStateAction<GroupRef[]>>;
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
+  groupTeacherMap: Record<string, string>;
   onDeleteRecords: (studentId: string) => void;
 }) {
+  const teacherNameForGroup = (groupId: string) => groupTeacherMap[groupId] || "Sin docente asignado";
   const [isPending, startTransition] = useTransition();
   const groupNames = groups.map((item) => item.name);
   const [newGroupGrade, setNewGroupGrade] = useState("1");
@@ -1344,11 +1366,12 @@ function GroupStudentManagement({
           </div>
         </div>
         <div className="student-management-table">
-          <div className="student-management-head"><span>N.º</span><span>Alumno</span><span>Grupo</span><span>Acciones</span></div>
+          <div className="student-management-head"><span>N.º</span><span>Alumno</span><span>Grupo</span><span>Docente asignado</span><span>Acciones</span></div>
           {visibleStudents.map((student) => <div className="student-management-row" key={student.id}>
             <StudentListNumberEditor student={student} students={students} setStudents={setStudents} />
             <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
             <span className="group-badge">{student.group}</span>
+            <span className="teacher-badge">{teacherNameForGroup(groups.find((group) => group.name === student.group)?.id ?? "")}</span>
             <button className="delete-button" onClick={() => deleteStudent(student)} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>
           </div>)}
           {visibleStudents.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos</strong><p>No hay alumnos que coincidan con los filtros seleccionados.</p></div>}
@@ -1501,68 +1524,87 @@ function TeacherManagement({
   setAssignments,
   onDeleteTeacher,
   teacherIds,
+  users,
+  onAssignTeacher,
 }: {
   teachers: TeacherProfile[];
   setTeachers: React.Dispatch<React.SetStateAction<TeacherProfile[]>>;
-  groups: string[];
+  groups: GroupRef[];
   assignments: Record<string, string[]>;
   setAssignments: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
   onDeleteTeacher: (teacher: string) => void;
   teacherIds: Record<string, string>;
+  users: AppUserSummary[];
+  onAssignTeacher: (groupId: string, teacherId: string | null) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [mode, setMode] = useState<"register" | "manage">("register");
-  const [givenNames, setGivenNames] = useState("");
-  const [paternalSurname, setPaternalSurname] = useState("");
-  const [maternalSurname, setMaternalSurname] = useState("");
-  const [assignedGrade, setAssignedGrade] = useState("");
-  const [assignedLetter, setAssignedLetter] = useState("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [assignPending, setAssignPending] = useState(false);
   const [dates, setDates] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const activeTeachers = teachers.filter((teacher) => teacher.status === "Activo").length;
-  const registeredGroups = groups.map((group) => {
-    const match = group.match(/^([1-6])°\s*([A-F])$/i);
-    return match ? { name: group, grade: match[1], letter: match[2].toUpperCase() } : null;
-  }).filter((group): group is { name: string; grade: string; letter: string } => Boolean(group));
-  const availableGrades = [...new Set(registeredGroups.map((group) => group.grade))].sort();
-  const availableLetters = registeredGroups.filter((group) => group.grade === assignedGrade).map((group) => group.letter).sort();
+  const docenteUsers = users.filter((user) => user.role === "Docente");
+  const groupsById = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const group of groups) map[group.id] = group.name;
+    return map;
+  }, [groups]);
+  const assignedGroupNames = useMemo(() => new Set(Object.values(assignments).flat()), [assignments]);
 
-  const addTeacher = (event: React.FormEvent) => {
+  const assignTeacher = async (event: React.FormEvent) => {
     event.preventDefault();
-    const normalizedGivenNames = givenNames.trim();
-    const normalizedPaternalSurname = paternalSurname.trim();
-    const normalizedMaternalSurname = maternalSurname.trim();
-    const normalizedName = `${normalizedGivenNames} ${normalizedPaternalSurname} ${normalizedMaternalSurname}`.replace(/\s+/g, " ").trim();
-    if ((assignedGrade && !assignedLetter) || (!assignedGrade && assignedLetter)) {
-      setNotice({ type: "error", text: "Selecciona tanto el grado como el grupo, o deja ambos sin asignar." });
+    if (!selectedTeacherId || !selectedGroupId) {
+      setNotice({ type: "error", text: "Selecciona un docente y un grupo." });
       return;
     }
-    if (teachers.some((teacher) => teacher.name.toLowerCase() === normalizedName.toLowerCase())) {
-      setNotice({ type: "error", text: "Ese docente ya está registrado." });
+    setAssignPending(true);
+    setNotice(null);
+    const result = await onAssignTeacher(selectedGroupId, selectedTeacherId);
+    setAssignPending(false);
+    if (!result.ok) {
+      setNotice({ type: "error", text: result.error ?? "No fue posible asignar el docente." });
       return;
     }
-    const assignedGroup = assignedGrade && assignedLetter ? `${assignedGrade}° ${assignedLetter}` : "";
+    const teacherName = docenteUsers.find((user) => user.id === selectedTeacherId)?.name ?? "";
+    const groupName = groupsById[selectedGroupId] ?? "";
+    setAssignments((current) => {
+      const next: Record<string, string[]> = {};
+      for (const [name, list] of Object.entries(current)) {
+        next[name] = list.filter((group) => group !== groupName);
+      }
+      next[teacherName] = [...(next[teacherName] ?? []), groupName];
+      return next;
+    });
+    setSelectedTeacherId("");
+    setSelectedGroupId("");
+    setNotice({ type: "success", text: `${teacherName} fue asignado a ${groupName}.` });
+  };
+
+  const unassignGroup = (teacherName: string, groupName: string) => {
+    const groupDoc = groups.find((group) => group.name === groupName);
+    if (!groupDoc) {
+      setNotice({ type: "error", text: "No se encontró el grupo en el servidor." });
+      return;
+    }
     requestConfirmation({
-      title: "Registrar docente",
-      message: `Se va a registrar a ${normalizedName}${assignedGroup ? ` con el grupo ${assignedGroup}` : " sin grupo asignado"}. ¿Deseas continuar?`,
-      confirmLabel: "Sí, registrar",
-    }, () => {
-      setTeachers((current) => [...current, {
-        name: normalizedName,
-        givenNames: normalizedGivenNames,
-        paternalSurname: normalizedPaternalSurname,
-        maternalSurname: normalizedMaternalSurname,
-        status: "Activo",
-        justifiedDates: [],
-      }]);
-      setAssignments((current) => ({ ...current, [normalizedName]: assignedGroup ? [assignedGroup] : [] }));
-      setGivenNames("");
-      setPaternalSurname("");
-      setMaternalSurname("");
-      setAssignedGrade("");
-      setAssignedLetter("");
-      setNotice({ type: "success", text: `${normalizedName} fue registrado${assignedGroup ? ` y asignado a ${assignedGroup}` : " sin grupo asignado"}.` });
+      title: "Quitar grupo asignado",
+      message: `Se eliminará la asignación del grupo ${groupName} para ${teacherName}. ¿Deseas continuar?`,
+      confirmLabel: "Sí, quitar grupo",
+      tone: "danger",
+    }, async () => {
+      const result = await onAssignTeacher(groupDoc.id, null);
+      if (!result.ok) {
+        setNotice({ type: "error", text: result.error ?? "No fue posible quitar el grupo." });
+        return;
+      }
+      setAssignments((current) => ({
+        ...current,
+        [teacherName]: (current[teacherName] ?? []).filter((group) => group !== groupName),
+      }));
+      setNotice({ type: "success", text: `${groupName} fue eliminado de las asignaciones de ${teacherName}.` });
     });
   };
 
@@ -1677,23 +1719,26 @@ function TeacherManagement({
       {notice && <div className={`notice notice-${notice.type} catalog-notice`}><Icon name={notice.type === "success" ? "check" : "alert"} /><div><strong>{notice.type === "success" ? "Personal actualizado" : "Revisa la información"}</strong><p>{notice.text}</p></div></div>}
       {mode === "register" && (
         <section className="panel teacher-register-card" role="tabpanel">
-          <div className="panel-head"><div><p className="eyebrow">NUEVO DOCENTE</p><h2>Datos del personal</h2></div><span className="form-icon"><Icon name="badge" /></span></div>
-          <p className="assignment-help">Para que el docente pueda iniciar sesión, primero crea su cuenta en <strong>Usuarios y accesos</strong> con el rol Docente. Después aparecerá aquí para asignarle grupos y justificantes.</p>
-          <form className="teacher-register-form" onSubmit={addTeacher}>
+          <div className="panel-head"><div><p className="eyebrow">ASIGNAR DOCENTE</p><h2>Asignar docente a grupo</h2></div><span className="form-icon"><Icon name="badge" /></span></div>
+          <p className="assignment-help">Selecciona un docente ya registrado en <strong>Usuarios y accesos</strong> y el grupo al que se asignará.</p>
+          <form className="teacher-register-form" onSubmit={assignTeacher}>
             <div className="teacher-name-fields">
-              <label>Nombre(s)<input required value={givenNames} onChange={(event) => { setGivenNames(event.target.value); setNotice(null); }} placeholder="Ej. María Fernanda" /></label>
-              <label>Primer apellido<input required value={paternalSurname} onChange={(event) => { setPaternalSurname(event.target.value); setNotice(null); }} placeholder="Ej. González" /></label>
-              <label>Segundo apellido<input required value={maternalSurname} onChange={(event) => { setMaternalSurname(event.target.value); setNotice(null); }} placeholder="Ej. Ramírez" /></label>
+              <label>Docente
+                <select required value={selectedTeacherId} onChange={(event) => { setSelectedTeacherId(event.target.value); setNotice(null); }}>
+                  <option value="">Selecciona un docente</option>
+                  {docenteUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+                </select>
+              </label>
+              <label>Grupo
+                <select required value={selectedGroupId} onChange={(event) => { setSelectedGroupId(event.target.value); setNotice(null); }}>
+                  <option value="">Selecciona un grupo</option>
+                  {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                </select>
+              </label>
             </div>
-            <div className="teacher-assignment-block">
-              <div><p className="eyebrow">ASIGNACIÓN INICIAL <span>OPCIONAL</span></p><p>También puedes asignar el grupo después desde “Agregar grupo a docente”.</p></div>
-              <div className="teacher-assignment-fields">
-                <label>Grado asignado<select value={assignedGrade} onChange={(event) => { setAssignedGrade(event.target.value); setAssignedLetter(""); setNotice(null); }}><option value="">Sin asignar</option>{availableGrades.map((grade) => <option key={grade} value={grade}>{grade}°</option>)}</select></label>
-                <label>Grupo<select value={assignedLetter} onChange={(event) => { setAssignedLetter(event.target.value); setNotice(null); }} disabled={!assignedGrade}><option value="">{assignedGrade ? "Selecciona un grupo" : "Primero selecciona grado"}</option>{availableLetters.map((letter) => <option key={letter} value={letter}>{letter}</option>)}</select></label>
-              </div>
-              {groups.length === 0 && <p className="assignment-help">Todavía no hay grupos registrados. El docente se guardará sin asignación.</p>}
-            </div>
-            <div className="teacher-register-actions"><button className="primary-button" type="submit"><Icon name="plus" size={18} /> Registrar docente</button></div>
+            {docenteUsers.length === 0 && <p className="assignment-help">Todavía no hay docentes registrados. Crea su cuenta en <strong>Usuarios y accesos</strong> con el rol Docente.</p>}
+            {groups.length === 0 && <p className="assignment-help">Todavía no hay grupos registrados. Créalos primero en <strong>Grupos y alumnos</strong>.</p>}
+            <div className="teacher-register-actions"><button className="primary-button" type="submit" disabled={assignPending || !docenteUsers.length || !groups.length}><Icon name="plus" size={18} /> {assignPending ? "Asignando…" : "Asignar docente a grupo"}</button></div>
           </form>
         </section>
       )}
@@ -1707,6 +1752,16 @@ function TeacherManagement({
             <button className={teacher.status === "Activo" ? "temporary-button" : "restore-button"} onClick={() => toggleStatus(teacher)} disabled={isPending}><Icon name={teacher.status === "Activo" ? "clock" : "check"} size={17} /> {teacher.status === "Activo" ? "Dar de baja temporal" : "Reactivar docente"}</button>
             <button className="permanent-delete-button" onClick={() => deleteTeacher(teacher.name)} disabled={isPending}><Icon name="trash" size={17} /> Eliminar definitivamente</button>
           </div>
+          {(assignments[teacher.name] || []).length > 0 && (
+            <div className="assigned-groups">
+              {(assignments[teacher.name] || []).map((group) => (
+                <div className="assigned-group" key={group}>
+                  <span><Icon name="users" size={17} /> {group}</span>
+                  <button onClick={() => unassignGroup(teacher.name, group)} disabled={isPending} aria-label={`Quitar ${group} de ${teacher.name}`}><Icon name="close" size={15} /></button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="justification-box">
             <div><p className="eyebrow">JUSTIFICAR DÍA</p><span>La fecha aparecerá como justificada en asistencia.</span></div>
             <div className="justification-row"><input type="date" value={dates[teacher.name] || ""} onChange={(event) => setDates((current) => ({ ...current, [teacher.name]: event.target.value }))} /><button className="secondary-button" onClick={() => justifyDate(teacher)} disabled={isPending}><Icon name="calendar" size={16} /> Justificar</button></div>
