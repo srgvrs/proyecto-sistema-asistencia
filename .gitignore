@@ -22,3 +22,5 @@ logs/
 /.plugins/
 /.opencode-skills/
 .aider*
+*.db
+.venv/ 
