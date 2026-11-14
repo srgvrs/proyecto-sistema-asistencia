@@ -21,6 +21,10 @@
 ## Fase 1.7: Conectar UI a las Server Actions — ✅ Completada
 - [x] Migrar los componentes de SchoolApp.tsx (StudentManagement, VisitorRegistry, etc.) para que llamen a las nuevas Server Actions en lugar de solo actualizar el estado local.
 
-## Fase 1.8: Colecciones Faltantes (Docentes) — ⏳ Pendiente
-- [ ] Crear colecciones `Teachers`, `TeacherGroups` y `TeacherAttendance`.
-- [ ] Actualizar el frontend para dejar de devolver arrays vacíos en estas secciones.
+## Fase 1.8: Colecciones Faltantes (Docentes) — ✅ Completada
+- [x] Reutilizar `Users` (rol `Docente`) como fuente de identidad docente; añadir campo `employmentStatus`.
+- [x] Crear colección `TeacherAttendance` (asistencia diaria con entrada/salida).
+- [x] Crear colección `TeacherJustifications` (justificantes por fecha).
+- [x] Reutilizar `Groups.teacher` para la asignación docente ↔ grupos (sin colección puente).
+- [x] Reglas de acceso por rol (Directivo / Docente / Vigilante) en las nuevas colecciones.
+- [x] Conectar `TeacherCheckIn` y `TeacherManagement` a las Server Actions (`createTeacherAttendanceAction`, `updateTeacherAttendanceAction`, `createTeacherJustificationAction`, `deleteTeacherJustificationAction`, `updateTeacherEmploymentStatusAction`).

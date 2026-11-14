@@ -8,10 +8,15 @@ import {
   createAttendanceAction,
   createGroupAction,
   createStudentAction,
+  createTeacherAttendanceAction,
+  createTeacherJustificationAction,
   createVisitorAction,
+  deleteTeacherJustificationAction,
   deleteVisitorAction,
   loadSchoolStateAction,
   officializeAttendanceAction,
+  updateTeacherAttendanceAction,
+  updateTeacherEmploymentStatusAction,
   updateVisitorAction,
 } from "./school-data-actions";
 import type { AppUserSummary, Role } from "@/lib/app-user-types";
@@ -305,6 +310,13 @@ function App({
   const [teacherAttendance, setTeacherAttendance, replaceTeacherAttendance] = useSyncedSchoolSection("teacherAttendance", schoolState.teacherAttendance);
   const [teacherGroups, setTeacherGroups, replaceTeacherGroups] = useSyncedSchoolSection("teacherGroups", schoolState.teacherGroups);
   const [teachers, setTeachers, replaceTeachers] = useSyncedSchoolSection("teachers", schoolState.teachers);
+  const teacherIds = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const user of users) {
+      if (user.role === "Docente") map[user.name] = user.id;
+    }
+    return map;
+  }, [users]);
 
   const refreshSchoolState = useCallback(async () => {
     const result = await loadSchoolStateAction();
@@ -476,6 +488,7 @@ function App({
           {view === "docentes" && session.role === "Docente" && (
             <TeacherCheckIn
               teacher={session.name}
+              teacherId={session.id}
               attendance={teacherAttendance}
               setAttendance={setTeacherAttendance}
             />
@@ -502,6 +515,7 @@ function App({
               groups={groups.map((group) => group.name)}
               assignments={teacherGroups}
               setAssignments={setTeacherGroups}
+              teacherIds={teacherIds}
               onDeleteTeacher={(teacher) => {
                 setTeacherGroups((current) => {
                   const next = { ...current };
@@ -677,14 +691,18 @@ function VisitorDashboard({ userName, visitors, onNavigate }: { userName: string
 
 function TeacherCheckIn({
   teacher,
+  teacherId,
   attendance,
   setAttendance,
 }: {
   teacher: string;
+  teacherId: string;
   attendance: TeacherAttendance[];
   setAttendance: React.Dispatch<React.SetStateAction<TeacherAttendance[]>>;
 }) {
   const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const today = todayISO();
   const todayRecord = attendance.find((record) => record.teacher === teacher && record.date === today);
@@ -692,36 +710,58 @@ function TeacherCheckIn({
   const teacherHistory = attendance.filter((record) => record.teacher === teacher).sort((a, b) => b.date.localeCompare(a.date));
 
   const registerEntry = () => {
-    if (todayRecord) return;
+    if (todayRecord || isPending) return;
     requestConfirmation({
       title: "Registrar entrada",
       message: `Se registrará tu entrada al plantel con la hora actual. ¿Deseas continuar?`,
       confirmLabel: "Sí, registrar entrada",
     }, () => {
-      const now = new Date();
-      setAttendance((current) => [{
-        id: Date.now(),
-        teacher,
-        date: today,
-        entryTime: now.toTimeString().slice(0, 5),
-        exitTime: null,
-      }, ...current]);
-      setNotice("Tu entrada al plantel fue registrada correctamente.");
+      setError("");
+      startTransition(async () => {
+        const result = await createTeacherAttendanceAction({
+          teacherId,
+          date: today,
+          entryTime: new Date().toISOString(),
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setAttendance((current) => [{
+          id: Date.now(),
+          teacher: result.record.teacher || teacher,
+          date: result.record.date,
+          entryTime: result.record.entryTime,
+          exitTime: result.record.exitTime,
+        }, ...current]);
+        setNotice("Tu entrada al plantel fue registrada correctamente.");
+      });
     });
   };
 
   const registerExit = () => {
-    if (!todayRecord || todayRecord.exitTime) return;
+    if (!todayRecord || todayRecord.exitTime || isPending) return;
     requestConfirmation({
       title: "Registrar salida",
       message: `Se registrará tu salida del plantel con la hora actual. ¿Deseas continuar?`,
       confirmLabel: "Sí, registrar salida",
     }, () => {
-      const exitTime = new Date().toTimeString().slice(0, 5);
-      setAttendance((current) => current.map((record) =>
-        record.id === todayRecord.id ? { ...record, exitTime } : record,
-      ));
-      setNotice("Tu salida del plantel fue registrada correctamente.");
+      setError("");
+      startTransition(async () => {
+        const result = await updateTeacherAttendanceAction(todayRecord.id.toString(), {
+          exitTime: new Date().toISOString(),
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setAttendance((current) => current.map((record) =>
+          record.id === todayRecord.id
+            ? { ...record, exitTime: result.record.exitTime }
+            : record,
+        ));
+        setNotice("Tu salida del plantel fue registrada correctamente.");
+      });
     });
   };
 
@@ -743,8 +783,9 @@ function TeacherCheckIn({
             <div><small>FECHA DE REGISTRO</small><strong>{formatDate(today)}</strong><p>La hora exacta se asignará automáticamente.</p></div>
           </div>
           {notice && <div className="notice notice-success"><Icon name="check" /><div><strong>Registro actualizado</strong><p>{notice}</p></div></div>}
-          {!todayRecord && <button className="primary-button teacher-action" onClick={registerEntry}><Icon name="check" size={18} /> Registrar mi entrada</button>}
-          {isInside && <button className="primary-button teacher-action teacher-exit-action" onClick={registerExit}><Icon name="logout" size={18} /> Registrar mi salida</button>}
+          {error && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo registrar</strong><p>{error}</p></div></div>}
+          {!todayRecord && <button className="primary-button teacher-action" onClick={registerEntry} disabled={isPending}><Icon name="check" size={18} /> {isPending ? "Registrando…" : "Registrar mi entrada"}</button>}
+          {isInside && <button className="primary-button teacher-action teacher-exit-action" onClick={registerExit} disabled={isPending}><Icon name="logout" size={18} /> {isPending ? "Registrando…" : "Registrar mi salida"}</button>}
           {todayRecord?.exitTime && <div className="day-complete"><Icon name="check" /><div><strong>Jornada registrada</strong><p>Entrada {todayRecord.entryTime} h · Salida {todayRecord.exitTime} h</p></div></div>}
           <p className="teacher-help"><Icon name="alert" size={16} /> Solo se permite un registro de entrada y salida por día.</p>
         </section>
@@ -1459,6 +1500,7 @@ function TeacherManagement({
   assignments,
   setAssignments,
   onDeleteTeacher,
+  teacherIds,
 }: {
   teachers: TeacherProfile[];
   setTeachers: React.Dispatch<React.SetStateAction<TeacherProfile[]>>;
@@ -1466,6 +1508,7 @@ function TeacherManagement({
   assignments: Record<string, string[]>;
   setAssignments: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
   onDeleteTeacher: (teacher: string) => void;
+  teacherIds: Record<string, string>;
 }) {
   const [mode, setMode] = useState<"register" | "manage">("register");
   const [givenNames, setGivenNames] = useState("");
@@ -1475,6 +1518,7 @@ function TeacherManagement({
   const [assignedLetter, setAssignedLetter] = useState("");
   const [dates, setDates] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const activeTeachers = teachers.filter((teacher) => teacher.status === "Activo").length;
   const registeredGroups = groups.map((group) => {
@@ -1524,14 +1568,26 @@ function TeacherManagement({
 
   const toggleStatus = (teacher: TeacherProfile) => {
     const nextStatus = teacher.status === "Activo" ? "Baja temporal" : "Activo";
+    const teacherId = teacherIds[teacher.name];
+    if (!teacherId) {
+      setNotice({ type: "error", text: "No se encontró la cuenta del docente en el servidor." });
+      return;
+    }
     requestConfirmation({
       title: teacher.status === "Activo" ? "Dar de baja temporal" : "Reactivar docente",
       message: `${teacher.name} cambiará al estado “${nextStatus}”. ¿Deseas continuar?`,
       confirmLabel: teacher.status === "Activo" ? "Sí, dar de baja" : "Sí, reactivar",
       tone: teacher.status === "Activo" ? "danger" : "default",
     }, () => {
-      setTeachers((current) => current.map((item) => item.name === teacher.name ? { ...item, status: nextStatus } : item));
-      setNotice({ type: "success", text: `${teacher.name} ahora tiene estado: ${nextStatus}.` });
+      startTransition(async () => {
+        const result = await updateTeacherEmploymentStatusAction(teacherId, nextStatus);
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setTeachers((current) => current.map((item) => item.name === teacher.name ? { ...item, status: nextStatus } : item));
+        setNotice({ type: "success", text: `${teacher.name} ahora tiene estado: ${nextStatus}.` });
+      });
     });
   };
 
@@ -1545,20 +1601,44 @@ function TeacherManagement({
       setNotice({ type: "error", text: "Ese día ya se encuentra justificado." });
       return;
     }
-    setTeachers((current) => current.map((item) => item.name === teacher.name ? { ...item, justifiedDates: [...item.justifiedDates, date].sort().reverse() } : item));
-    setDates((current) => ({ ...current, [teacher.name]: "" }));
-    setNotice({ type: "success", text: `Se justificó el ${formatDate(date)} para ${teacher.name}.` });
+    const teacherId = teacherIds[teacher.name];
+    if (!teacherId) {
+      setNotice({ type: "error", text: "No se encontró la cuenta del docente en el servidor." });
+      return;
+    }
+    startTransition(async () => {
+      const result = await createTeacherJustificationAction({ teacherId, date });
+      if (!result.ok) {
+        setNotice({ type: "error", text: result.error });
+        return;
+      }
+      setTeachers((current) => current.map((item) => item.name === teacher.name ? { ...item, justifiedDates: [...item.justifiedDates, date].sort().reverse() } : item));
+      setDates((current) => ({ ...current, [teacher.name]: "" }));
+      setNotice({ type: "success", text: `Se justificó el ${formatDate(date)} para ${teacher.name}.` });
+    });
   };
 
   const removeJustification = (teacherName: string, date: string) => {
+    const teacherId = teacherIds[teacherName];
+    if (!teacherId) {
+      setNotice({ type: "error", text: "No se encontró la cuenta del docente en el servidor." });
+      return;
+    }
     requestConfirmation({
       title: "Eliminar justificación",
       message: `Se eliminará la justificación del ${formatDate(date)} para ${teacherName}. ¿Deseas continuar?`,
       confirmLabel: "Sí, eliminar",
       tone: "danger",
     }, () => {
-      setTeachers((current) => current.map((teacher) => teacher.name === teacherName ? { ...teacher, justifiedDates: teacher.justifiedDates.filter((item) => item !== date) } : teacher));
-      setNotice({ type: "success", text: `La justificación del ${formatDate(date)} fue eliminada.` });
+      startTransition(async () => {
+        const result = await deleteTeacherJustificationAction(teacherId, date);
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setTeachers((current) => current.map((teacher) => teacher.name === teacherName ? { ...teacher, justifiedDates: teacher.justifiedDates.filter((item) => item !== date) } : teacher));
+        setNotice({ type: "success", text: `La justificación del ${formatDate(date)} fue eliminada.` });
+      });
     });
   };
 
@@ -1598,6 +1678,7 @@ function TeacherManagement({
       {mode === "register" && (
         <section className="panel teacher-register-card" role="tabpanel">
           <div className="panel-head"><div><p className="eyebrow">NUEVO DOCENTE</p><h2>Datos del personal</h2></div><span className="form-icon"><Icon name="badge" /></span></div>
+          <p className="assignment-help">Para que el docente pueda iniciar sesión, primero crea su cuenta en <strong>Usuarios y accesos</strong> con el rol Docente. Después aparecerá aquí para asignarle grupos y justificantes.</p>
           <form className="teacher-register-form" onSubmit={addTeacher}>
             <div className="teacher-name-fields">
               <label>Nombre(s)<input required value={givenNames} onChange={(event) => { setGivenNames(event.target.value); setNotice(null); }} placeholder="Ej. María Fernanda" /></label>
@@ -1628,7 +1709,7 @@ function TeacherManagement({
           </div>
           <div className="justification-box">
             <div><p className="eyebrow">JUSTIFICAR DÍA</p><span>La fecha aparecerá como justificada en asistencia.</span></div>
-            <div className="justification-row"><input type="date" value={dates[teacher.name] || ""} onChange={(event) => setDates((current) => ({ ...current, [teacher.name]: event.target.value }))} /><button className="secondary-button" onClick={() => justifyDate(teacher)}><Icon name="calendar" size={16} /> Justificar</button></div>
+            <div className="justification-row"><input type="date" value={dates[teacher.name] || ""} onChange={(event) => setDates((current) => ({ ...current, [teacher.name]: event.target.value }))} /><button className="secondary-button" onClick={() => justifyDate(teacher)} disabled={isPending}><Icon name="calendar" size={16} /> Justificar</button></div>
             {teacher.justifiedDates.length > 0 && <div className="justified-dates">{teacher.justifiedDates.slice(0, 4).map((date) => <span key={date}>{formatDate(date)}<button onClick={() => removeJustification(teacher.name, date)} aria-label={`Eliminar justificación del ${formatDate(date)}`}><Icon name="close" size={12} /></button></span>)}</div>}
           </div>
         </section>)}
