@@ -1,6 +1,6 @@
 import path from 'path'
-import { buildFigmaConfig } from '@payloadcms/figma'
-import { mcpPlugin } from '@payloadcms/plugin-mcp'
+import { buildConfig } from 'payload'
+import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { es as adminLanguage } from '@payloadcms/translations/languages/es'
 import { fileURLToPath } from 'url'
 import { Admins } from './collections/Admins'
@@ -20,7 +20,13 @@ import { TeacherJustifications } from './collections/TeacherJustifications'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
-export default buildFigmaConfig({
+export default buildConfig({
+  secret: process.env.PAYLOAD_SECRET || 'super-secret-local-key-12345',
+  db: sqliteAdapter({
+    client: {
+      url: process.env.DATABASE_URI || 'file:./school.db',
+    },
+  }),
   admin: {
     user: Admins.slug,
     constrainWidth: true,
@@ -63,6 +69,5 @@ export default buildFigmaConfig({
     fallback: true,
     defaultLocale: 'en',
   },
-  plugins: [mcpPlugin({})],
-  figma: {},
+  plugins: [],
 })
