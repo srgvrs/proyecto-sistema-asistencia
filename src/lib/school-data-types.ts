@@ -1,0 +1,77 @@
+export type Status = "Presente" | "Retardo" | "Falta"
+
+export type Student = {
+  id: string
+  name: string
+  listNumber: number
+  givenNames?: string
+  paternalSurname?: string
+  maternalSurname?: string
+  group: string
+}
+
+export type AttendanceRecord = {
+  studentId: string
+  date: string
+  time: string
+  status: Status
+  source: "Acceso" | "Pase de lista"
+}
+
+export type OfficialAttendanceStudent = {
+  studentId: string
+  name: string
+  listNumber: number
+}
+
+export type OfficialAttendanceList = {
+  id: string
+  group: string
+  month: string
+  teacher: string
+  officialDates: string[]
+  students: OfficialAttendanceStudent[]
+  marks: Record<string, Record<string, "." | "X">>
+  updatedAt: string
+}
+
+export type Visitor = {
+  id: number
+  name: string
+  identification: string
+  reason: string
+  host: string
+  date: string
+  entryTime: string
+  exitTime: string | null
+}
+
+export type TeacherAttendance = {
+  id: number
+  teacher: string
+  date: string
+  entryTime: string
+  exitTime: string | null
+}
+
+export type TeacherProfile = {
+  name: string
+  givenNames?: string
+  paternalSurname?: string
+  maternalSurname?: string
+  status: "Activo" | "Baja temporal"
+  justifiedDates: string[]
+}
+
+export type SchoolStateData = {
+  students: Student[]
+  groups: string[]
+  attendanceRecords: AttendanceRecord[]
+  officialAttendanceLists: OfficialAttendanceList[]
+  visitors: Visitor[]
+  teacherAttendance: TeacherAttendance[]
+  teacherGroups: Record<string, string[]>
+  teachers: TeacherProfile[]
+}
+
+export type SchoolStateSection = keyof SchoolStateData
