@@ -523,15 +523,41 @@ export async function createStudentAction(
   if (!isString(input.firstName) || !isString(input.lastName) || !isString(input.matricula) || !isString(input.groupId)) {
     return { ok: false, error: "Los datos del alumno no son válidos." }
   }
+  const groupId = Number(input.groupId)
+  if (!Number.isInteger(groupId)) {
+    return { ok: false, error: "El grupo seleccionado no es válido." }
+  }
   try {
     const payload = await getPayload({ config })
+    const groupStudents = await payload.find({
+      collection: "students",
+      where: { group: { equals: groupId } },
+      limit: 2000,
+      overrideAccess: false,
+      user,
+    })
+    const usedNumbers = new Set(
+      (groupStudents.docs as StudentDoc[])
+        .map((doc) => parseListNumber(doc.matricula))
+        .filter((value) => value > 0),
+    )
+    const requestedNumber = parseListNumber(input.matricula)
+    const listNumber = requestedNumber > 0
+      ? requestedNumber
+      : Math.max(0, ...usedNumbers) + 1
+    if (usedNumbers.has(listNumber)) {
+      return { ok: false, error: `El número ${listNumber} ya está asignado en ese grupo.` }
+    }
+    const matricula = requestedNumber > 0
+      ? input.matricula.trim()
+      : `${input.matricula.trim().replace(/-\d+$/, "")}-${listNumber}`
     const doc = await payload.create({
       collection: "students",
       data: {
         firstName: input.firstName.trim(),
         lastName: input.lastName.trim(),
-        matricula: input.matricula.trim(),
-        group: Number(input.groupId),
+        matricula,
+        group: groupId,
       },
       overrideAccess: false,
       user,
@@ -540,6 +566,9 @@ export async function createStudentAction(
     return { ok: true, student: mapStudentDoc(created, parseListNumber(created.matricula)) }
   } catch (error: any) {
     console.error("ERROR AL CREAR ALUMNO:", error)
+    if (/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
+      return { ok: false, error: "Esa matrícula ya está registrada." }
+    }
     return { ok: false, error: error?.message || "No fue posible crear el alumno." }
   }
 }
@@ -607,12 +636,23 @@ export async function createGroupAction(
   if (!isString(input.name) || !Number.isInteger(input.grade) || input.grade < 1 || input.grade > 6) {
     return { ok: false, error: "Los datos del grupo no son válidos." }
   }
+  const name = input.name.trim()
   try {
     const payload = await getPayload({ config })
+    const existing = await payload.find({
+      collection: "groups",
+      where: { name: { equals: name } },
+      limit: 1,
+      overrideAccess: false,
+      user,
+    })
+    if (existing.docs.length > 0) {
+      return { ok: false, error: "Ese grupo ya existe." }
+    }
     const doc = await payload.create({
       collection: "groups",
       data: {
-        name: input.name.trim(),
+        name,
         grade: input.grade,
         teacher: input.teacherId ? Number(input.teacherId) : undefined,
       },
@@ -621,7 +661,10 @@ export async function createGroupAction(
     })
     const group = doc as GroupDoc
     return { ok: true, group: { id: String(group.id), name: group.name, grade: group.grade } }
-  } catch {
+  } catch (error: any) {
+    if (/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
+      return { ok: false, error: "Ese grupo ya existe." }
+    }
     return { ok: false, error: "No fue posible crear el grupo." }
   }
 }

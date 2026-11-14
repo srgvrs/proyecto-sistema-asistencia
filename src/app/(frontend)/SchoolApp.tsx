@@ -1289,7 +1289,7 @@ function GroupStudentManagement({
               <label>Grupo<select required value={newGroupLetter} onChange={(event) => { setNewGroupLetter(event.target.value); setNotice(null); }}>{groupLetters.map((letter) => <option key={letter} value={letter}>{letter}</option>)}</select></label>
             </div>
             <p className="group-name-preview">Se creará el grupo <strong>{newGroupGrade}° {newGroupLetter}</strong></p>
-            <button className="primary-button" type="submit"><Icon name="plus" size={18} /> Agregar grupo</button>
+            <button className="primary-button" type="submit" disabled={groups.some((item) => item.name.toLowerCase() === `${newGroupGrade}° ${newGroupLetter}`.toLowerCase())}><Icon name="plus" size={18} /> Agregar grupo</button>
           </div>
         </form>
         <form className="panel management-form" onSubmit={addStudent}>

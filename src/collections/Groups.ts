@@ -35,6 +35,8 @@ export const Groups: CollectionConfig = {
       label: "Nombre del grupo",
       type: "text",
       required: true,
+      unique: true,
+      index: true,
     },
     {
       name: "grade",
