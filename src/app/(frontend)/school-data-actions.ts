@@ -115,9 +115,10 @@ type TeacherUserDoc = {
   employmentStatus?: "Activo" | "Baja temporal" | null
 }
 
-const getRelationId = (value: number | { id: number } | null | undefined): string => {
+const getRelationId = (value: any): string => {
   if (value === null || value === undefined) return ""
-  return typeof value === "number" ? String(value) : String(value.id)
+  if (typeof value === "object") return String(value.id)
+  return String(value)
 }
 
 const getRelationName = (value: number | { id: number; name?: string } | null | undefined): string => {
@@ -1028,8 +1029,8 @@ export async function assignTeacherToGroupAction(
 
     const doc = await payload.update({
       collection: "groups",
-      id: groupId as any,
-      data: { teacher: teacherId ? (teacherId as any) : null },
+      id: Number(groupId) as any,
+      data: { teacher: teacherId ? (Number(teacherId) as any) : null },
       overrideAccess: false,
       user,
     }) as any
@@ -1041,8 +1042,9 @@ export async function assignTeacherToGroupAction(
         teacherId,
       },
     }
-  } catch {
-    return { ok: false, error: "No fue posible asignar el docente al grupo." }
+  } catch (error: any) {
+    console.error("Error al asignar docente:", error)
+    return { ok: false, error: error?.message || "No fue posible asignar el docente al grupo." }
   }
 }
 
