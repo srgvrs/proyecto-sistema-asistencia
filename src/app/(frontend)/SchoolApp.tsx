@@ -328,12 +328,6 @@ function App({
     return map;
   }, [groups, teacherGroups]);
 
-  const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
-    const result = await assignTeacherToGroupAction(groupId, teacherId);
-    if (result.ok) await refreshSchoolState();
-    return result;
-  }, [refreshSchoolState]);
-
   const refreshSchoolState = useCallback(async () => {
     const result = await loadSchoolStateAction();
     if (!result.ok) return;
@@ -347,6 +341,12 @@ function App({
     replaceTeacherGroups(nextState.teacherGroups);
     replaceTeachers(nextState.teachers);
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
+
+  const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
+    const result = await assignTeacherToGroupAction(groupId, teacherId);
+    if (result.ok) await refreshSchoolState();
+    return result;
+  }, [refreshSchoolState]);
 
   useEffect(() => {
     if (!session) return;
