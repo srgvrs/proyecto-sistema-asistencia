@@ -41,12 +41,6 @@ const toHHMM = (value: string | null | undefined): string => {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
 }
 
-const toISODateTimeFromHHMM = (date: string, time: string): string => {
-  const [hours, minutes] = time.split(":").map(Number)
-  const base = new Date(`${date}T00:00:00`)
-  base.setHours(hours || 0, minutes || 0, 0, 0)
-  return base.toISOString()
-}
 
 const mapStatusToCollection = (status: Status): "Presente" | "Ausente" | "Retardo" | "Justificado" => {
   if (status === "Falta") return "Ausente"
@@ -1011,4 +1005,3 @@ export async function updateTeacherEmploymentStatusAction(
   }
 }
 
-export { toISODateTimeFromHHMM }

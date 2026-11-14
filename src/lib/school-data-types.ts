@@ -80,3 +80,10 @@ export type SchoolStateData = {
 }
 
 export type SchoolStateSection = keyof SchoolStateData
+
+export const toISODateTimeFromHHMM = (date: string, time: string): string => {
+  const [hours, minutes] = time.split(":").map(Number)
+  const base = new Date(`${date}T00:00:00`)
+  base.setHours(hours || 0, minutes || 0, 0, 0)
+  return base.toISOString()
+}
