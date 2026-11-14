@@ -1510,13 +1510,9 @@ function TeacherManagement({
   }, [groups]);
   const assignedGroupNames = useMemo(() => new Set(Object.values(assignments).flat()), [assignments]);
 
-  const assignTeacher = async (event: React.FormEvent) => {
-    event.preventDefault();
-    console.log("FORM SUBMIT");
-    if (!selectedTeacherId || !selectedGroupId) {
-      setNotice({ type: "error", text: "Selecciona un docente y un grupo." });
-      return;
-    }
+  const assignTeacher = async () => {
+    console.log("FUNCIÓN ASSIGNTEACHER EJECUTADA", { selectedTeacherId, selectedGroupId });
+    if (!selectedTeacherId || !selectedGroupId) return;
     setAssignPending(true);
     setNotice(null);
     console.log("FRONTEND - Intentando asignar:", { selectedGroupId, selectedTeacherId });
@@ -1691,16 +1687,16 @@ function TeacherManagement({
         <section className="panel teacher-register-card" role="tabpanel">
           <div className="panel-head"><div><p className="eyebrow">ASIGNAR DOCENTE</p><h2>Asignar docente a grupo</h2></div><span className="form-icon"><Icon name="badge" /></span></div>
           <p className="assignment-help">Selecciona un docente ya registrado en <strong>Usuarios y accesos</strong> y el grupo al que se asignará.</p>
-          <form className="teacher-register-form" onSubmit={assignTeacher}>
+          <div className="teacher-register-form">
             <div className="teacher-name-fields">
               <label>Docente
-                <select required value={selectedTeacherId} onChange={(event) => { setSelectedTeacherId(event.target.value); setNotice(null); }}>
+                <select required value={selectedTeacherId} onChange={(event) => { console.log("SELECT DOCENTE", event.target.value); setSelectedTeacherId(event.target.value); setNotice(null); }}>
                   <option value="">Selecciona un docente</option>
                   {docenteUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </select>
               </label>
               <label>Grupo
-                <select required value={selectedGroupId} onChange={(event) => { setSelectedGroupId(event.target.value); setNotice(null); }}>
+                <select required value={selectedGroupId} onChange={(event) => { console.log("SELECT GRUPO", event.target.value); setSelectedGroupId(event.target.value); setNotice(null); }}>
                   <option value="">Selecciona un grupo</option>
                   {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                 </select>
@@ -1708,8 +1704,24 @@ function TeacherManagement({
             </div>
             {docenteUsers.length === 0 && <p className="assignment-help">Todavía no hay docentes registrados. Crea su cuenta en <strong>Usuarios y accesos</strong> con el rol Docente.</p>}
             {groups.length === 0 && <p className="assignment-help">Todavía no hay grupos registrados. Créalos primero en <strong>Grupos y alumnos</strong>.</p>}
-            <div className="teacher-register-actions"><button className="primary-button" type="submit" disabled={assignPending || !docenteUsers.length || !groups.length}><Icon name="plus" size={18} /> {assignPending ? "Asignando…" : "Asignar docente a grupo"}</button></div>
-          </form>
+            <div className="teacher-register-actions">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={assignPending}
+                onClick={() => {
+                  console.log("BOTÓN CLICKEADO", { selectedGroupId, selectedTeacherId });
+                  if (!selectedTeacherId || !selectedGroupId) {
+                    setNotice({ type: "error", text: "Selecciona un docente y un grupo válidos." });
+                    return;
+                  }
+                  assignTeacher();
+                }}
+              >
+                <Icon name="plus" size={18} /> {assignPending ? "Asignando…" : "Asignar docente a grupo"}
+              </button>
+            </div>
+          </div>
         </section>
       )}
       {mode === "manage" && <div className="teacher-management-grid" role="tabpanel">
