@@ -86,71 +86,19 @@ export type ReportTemplate = {
 };
 
 
-const initialStudents: Student[] = [
-  { id: "A-1024", name: "Hernández López Sofía", listNumber: 4, givenNames: "Sofía", paternalSurname: "Hernández", maternalSurname: "López", group: "5° A" },
-  { id: "A-1025", name: "García Ruiz Mateo", listNumber: 3, givenNames: "Mateo", paternalSurname: "García", maternalSurname: "Ruiz", group: "5° A" },
-  { id: "A-1026", name: "Flores Díaz Valentina", listNumber: 2, givenNames: "Valentina", paternalSurname: "Flores", maternalSurname: "Díaz", group: "5° A" },
-  { id: "A-1027", name: "Morales Vega Santiago", listNumber: 5, givenNames: "Santiago", paternalSurname: "Morales", maternalSurname: "Vega", group: "5° A" },
-  { id: "A-1028", name: "Castillo Cruz Regina", listNumber: 1, givenNames: "Regina", paternalSurname: "Castillo", maternalSurname: "Cruz", group: "5° A" },
-  { id: "A-1029", name: "Reyes Soto Emiliano", listNumber: 6, givenNames: "Emiliano", paternalSurname: "Reyes", maternalSurname: "Soto", group: "5° A" },
-  { id: "B-1101", name: "Torres Silva Camila", listNumber: 3, givenNames: "Camila", paternalSurname: "Torres", maternalSurname: "Silva", group: "6° B" },
-  { id: "B-1102", name: "Ortiz Luna Leonardo", listNumber: 2, givenNames: "Leonardo", paternalSurname: "Ortiz", maternalSurname: "Luna", group: "6° B" },
-  { id: "B-1103", name: "Mendoza Paz Renata", listNumber: 1, givenNames: "Renata", paternalSurname: "Mendoza", maternalSurname: "Paz", group: "6° B" },
-  { id: "C-0901", name: "Romero León Daniela", listNumber: 2, givenNames: "Daniela", paternalSurname: "Romero", maternalSurname: "León", group: "4° C" },
-  { id: "C-0902", name: "Navarro Gil Sebastián", listNumber: 1, givenNames: "Sebastián", paternalSurname: "Navarro", maternalSurname: "Gil", group: "4° C" },
-].sort(compareStudentsByListNumber);
-const initialGroups: GroupRef[] = [
-  { id: "group-4c", name: "4° C" },
-  { id: "group-5a", name: "5° A" },
-  { id: "group-6b", name: "6° B" },
-];
 const schoolGrades = ["1", "2", "3", "4", "5", "6"];
 const groupLetters = ["A", "B", "C", "D", "E", "F"];
 
-const initialRecords: AttendanceRecord[] = [
-  { studentId: "A-1024", date: "2026-09-23", time: "07:44", status: "Presente", source: "Acceso" },
-  { studentId: "A-1025", date: "2026-09-23", time: "08:09", status: "Retardo", source: "Acceso" },
-  { studentId: "A-1026", date: "2026-09-23", time: "—", status: "Falta", source: "Pase de lista" },
-  { studentId: "B-1101", date: "2026-09-23", time: "07:51", status: "Presente", source: "Acceso" },
-  { studentId: "A-1024", date: "2026-09-22", time: "08:05", status: "Retardo", source: "Acceso" },
-  { studentId: "A-1025", date: "2026-09-22", time: "—", status: "Falta", source: "Pase de lista" },
-  { studentId: "A-1026", date: "2026-09-22", time: "07:48", status: "Presente", source: "Acceso" },
-  { studentId: "A-1027", date: "2026-09-22", time: "—", status: "Falta", source: "Pase de lista" },
-  { studentId: "B-1102", date: "2026-09-22", time: "08:12", status: "Retardo", source: "Acceso" },
-];
-
-const initialVisitors: Visitor[] = [
-  { id: "visitor-1", name: "Laura Martínez Ríos", identification: "INE · 4821", reason: "Reunión con docente", host: "María González", date: "2026-09-23", entryTime: "09:18", exitTime: "10:05" },
-  { id: "visitor-2", name: "Roberto Díaz Campos", identification: "INE · 7390", reason: "Entrega de materiales", host: "Dirección", date: "2026-09-23", entryTime: "10:42", exitTime: null },
-];
-
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const createStudentId = () => `student-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-const initialTeachers: TeacherProfile[] = [
-  { name: "María González", status: "Activo", justifiedDates: [] },
-  { name: "Pedro Hernández", status: "Activo", justifiedDates: [] },
-  { name: "Ana Martínez", status: "Activo", justifiedDates: [] },
-  { name: "Luis Ramírez", status: "Activo", justifiedDates: [] },
-];
-const initialTeacherGroups: Record<string, string[]> = {
-  "María González": ["5° A"],
-  "Pedro Hernández": ["6° B"],
-  "Ana Martínez": ["4° C"],
-  "Luis Ramírez": [],
-};
-const initialTeacherAttendance: TeacherAttendance[] = [
-  { id: 1, teacher: "Pedro Hernández", date: todayISO(), entryTime: "07:28", exitTime: null },
-  { id: 2, teacher: "Ana Martínez", date: todayISO(), entryTime: "07:36", exitTime: "13:14" },
-];
 const getSchoolStateWithDefaults = (state?: Partial<SchoolStateData> | null): SchoolStateData => ({
-  students: state?.students ?? initialStudents,
-  groups: state?.groups ?? initialGroups,
-  attendanceRecords: state?.attendanceRecords ?? initialRecords,
+  students: state?.students ?? [],
+  groups: state?.groups ?? [],
+  attendanceRecords: state?.attendanceRecords ?? [],
   officialAttendanceLists: state?.officialAttendanceLists ?? [],
-  visitors: state?.visitors ?? initialVisitors,
-  teacherAttendance: state?.teacherAttendance ?? initialTeacherAttendance,
-  teacherGroups: state?.teacherGroups ?? initialTeacherGroups,
-  teachers: state?.teachers ?? initialTeachers,
+  visitors: state?.visitors ?? [],
+  teacherAttendance: state?.teacherAttendance ?? [],
+  teacherGroups: state?.teacherGroups ?? {},
+  teachers: state?.teachers ?? [],
 });
 const formatDate = (date: string) =>
   new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" }).format(

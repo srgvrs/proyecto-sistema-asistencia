@@ -448,15 +448,18 @@ export async function loadSchoolStateAction(): Promise<
       }
     })
 
+    const teacherNameById = new Map<string, string>(
+      teacherDocs.map((doc) => [String(doc.id), doc.name]),
+    )
     const teacherGroups: Record<string, string[]> = {}
     for (const group of groupsResult.docs as GroupDoc[]) {
       const teacherId = getRelationId(group.teacher)
       if (!teacherId) continue
-      const teacherDoc = teacherDocs.find((doc) => String(doc.id) === teacherId)
-      if (!teacherDoc) continue
-      const list = teacherGroups[teacherDoc.name] || []
+      const teacherName = teacherNameById.get(teacherId)
+      if (!teacherName) continue
+      const list = teacherGroups[teacherName] || []
       list.push(group.name)
-      teacherGroups[teacherDoc.name] = list
+      teacherGroups[teacherName] = list
     }
 
     const teacherAttendance: TeacherAttendance[] = (teacherAttendanceResult.docs as TeacherAttendanceDoc[]).map((doc, index) => {
@@ -1006,7 +1009,7 @@ export async function assignTeacherToGroupAction(
         collection: "users",
         where: {
           and: [
-            { id: { equals: Number(teacherId) } },
+            { id: { equals: teacherId } },
             { role: { equals: "Docente" } },
           ],
         },
@@ -1025,8 +1028,8 @@ export async function assignTeacherToGroupAction(
 
     const doc = await payload.update({
       collection: "groups",
-      id: Number(groupId),
-      data: { teacher: teacherId !== null ? Number(teacherId) : null },
+      id: groupId,
+      data: { teacher: teacherId !== null ? teacherId : null },
       overrideAccess: false,
       user,
     })
