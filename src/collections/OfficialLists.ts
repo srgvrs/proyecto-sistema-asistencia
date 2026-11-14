@@ -40,6 +40,16 @@ export const OfficialLists: CollectionConfig = {
       relationTo: "report-templates",
       required: false,
     },
+    {
+      name: "marks",
+      label: "Matriz de asistencia",
+      type: "json",
+      required: false,
+      admin: {
+        description:
+          "Mapa de marcas por alumno y fecha. Ej: { \"<studentId>\": { \"2026-09-23\": \".\" } }",
+      },
+    },
   ],
   versions: false,
 }

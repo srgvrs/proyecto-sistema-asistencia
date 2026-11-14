@@ -94,6 +94,7 @@ type OfficialListDoc = {
   title: string
   group: string | { id: string; name: string }
   file?: string | { id: string; url?: string | null } | null
+  marks?: Record<string, Record<string, "." | "X">> | null
 }
 
 const getRelationId = (value: string | { id: string } | null | undefined): string => {
@@ -152,16 +153,24 @@ const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
   exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
 })
 
-const mapOfficialListDoc = (doc: OfficialListDoc): OfficialAttendanceList => ({
-  id: doc.id,
-  group: getRelationName(doc.group),
-  month: "",
-  teacher: "",
-  officialDates: [],
-  students: [],
-  marks: {},
-  updatedAt: new Date().toISOString(),
-})
+const mapOfficialListDoc = (doc: OfficialListDoc): OfficialAttendanceList => {
+  const marks = (doc.marks && typeof doc.marks === "object" && !Array.isArray(doc.marks))
+    ? (doc.marks as Record<string, Record<string, "." | "X">>)
+    : {}
+  const officialDates = [...new Set(
+    Object.values(marks).flatMap((studentMarks) => Object.keys(studentMarks || {})),
+  )].sort()
+  return {
+    id: doc.id,
+    group: getRelationName(doc.group),
+    month: officialDates[0]?.slice(0, 7) || "",
+    teacher: "",
+    officialDates,
+    students: [],
+    marks,
+    updatedAt: new Date().toISOString(),
+  }
+}
 
 type OfficializeAttendanceInput = {
   group: string
@@ -288,31 +297,59 @@ export async function officializeAttendanceAction(
       overrideAccess: false,
       user,
     })
-    if (!existingLists.docs.length) {
-      await payload.create({
+    const existingList = existingLists.docs[0] as OfficialListDoc | undefined
+    const existingMarks = (existingList?.marks && typeof existingList.marks === "object" && !Array.isArray(existingList.marks))
+      ? (existingList.marks as Record<string, Record<string, "." | "X">>)
+      : {}
+    const marks: Record<string, Record<string, "." | "X">> = { ...existingMarks }
+    for (const student of groupStudents) {
+      const status = submittedStatuses.get(student.id) as Status
+      marks[student.id] = {
+        ...(marks[student.id] || {}),
+        [input.date]: status === "Falta" ? "X" : ".",
+      }
+    }
+    const officialDates = [...new Set([
+      ...Object.values(marks).flatMap((studentMarks) => Object.keys(studentMarks || {})),
+    ])].sort()
+
+    let officialListId: string
+    if (existingList) {
+      const updated = await payload.update({
+        collection: "official-lists",
+        id: existingList.id,
+        data: { marks },
+        overrideAccess: false,
+        user,
+      })
+      officialListId = (updated as OfficialListDoc).id
+    } else {
+      const created = await payload.create({
         collection: "official-lists",
         data: {
           title,
           group: groupDoc.id,
+          marks,
         },
         overrideAccess: false,
         user,
       })
+      officialListId = (created as OfficialListDoc).id
     }
 
     const officialAttendanceLists: OfficialAttendanceList[] = [
       {
-        id: `${input.group}-${month}`,
+        id: officialListId,
         group: input.group,
         month,
         teacher: user.name,
-        officialDates: [input.date],
+        officialDates,
         students: groupStudents.map((student, index) => ({
           studentId: student.id,
           name: buildStudentName(student.firstName, student.lastName),
           listNumber: index + 1,
         })),
-        marks: {},
+        marks,
         updatedAt: new Date().toISOString(),
       },
     ]

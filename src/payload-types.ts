@@ -545,6 +545,18 @@ export interface OfficialList {
   title: string;
   group: string | Group;
   file?: (string | null) | ReportTemplate;
+  /**
+   * Mapa de marcas por alumno y fecha. Ej: { "<studentId>": { "2026-09-23": "." } }
+   */
+  marks?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   createdBy?:
     | ({
         relationTo: 'admins';
@@ -903,6 +915,7 @@ export interface OfficialListsSelect<T extends boolean = true> {
   title?: T;
   group?: T;
   file?: T;
+  marks?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
