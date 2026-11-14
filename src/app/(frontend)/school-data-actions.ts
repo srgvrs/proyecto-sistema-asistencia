@@ -501,8 +501,9 @@ export async function loadSchoolStateAction(): Promise<
         teachers,
       },
     }
-  } catch {
-    return { ok: false, error: "No fue posible actualizar la información escolar." }
+  } catch (error: any) {
+    console.error("LOAD ERROR", JSON.stringify((error as any)?.data?.errors ?? (error as any)?.message ?? error, null, 2))
+    return { ok: false, error: (error as any)?.data?.errors?.[0]?.message || (error as any)?.message || "No fue posible actualizar la información escolar." }
   }
 }
 
