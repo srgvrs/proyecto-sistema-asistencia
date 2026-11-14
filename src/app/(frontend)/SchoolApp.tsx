@@ -1515,14 +1515,6 @@ function TeacherManagement({
     }
     const teacherName = docenteUsers.find((user) => user.id === selectedTeacherId)?.name ?? "";
     const groupName = groupsById[selectedGroupId] ?? "";
-    setAssignments((current) => {
-      const next: Record<string, string[]> = {};
-      for (const [name, list] of Object.entries(current)) {
-        next[name] = list.filter((group) => group !== groupName);
-      }
-      next[teacherName] = [...(next[teacherName] ?? []), groupName];
-      return next;
-    });
     setSelectedTeacherId("");
     setSelectedGroupId("");
     setNotice({ type: "success", text: `${teacherName} fue asignado a ${groupName}.` });
@@ -1545,10 +1537,6 @@ function TeacherManagement({
         setNotice({ type: "error", text: result.error ?? "No fue posible quitar el grupo." });
         return;
       }
-      setAssignments((current) => ({
-        ...current,
-        [teacherName]: (current[teacherName] ?? []).filter((group) => group !== groupName),
-      }));
       setNotice({ type: "success", text: `${groupName} fue eliminado de las asignaciones de ${teacherName}.` });
     });
   };
@@ -1718,15 +1706,15 @@ function TeacherManagement({
         {teachers.map((teacher) => <section className="panel teacher-management-card" key={teacher.name}>
           <div className="teacher-management-head">
             <span className="large-avatar">{teacher.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
-            <div><p className="eyebrow">DOCENTE</p><h2>{teacher.name}</h2><span className={`staff-status ${teacher.status === "Activo" ? "active" : "inactive"}`}><i></i>{teacher.status}</span>{(assignments[teacher.name] || []).length > 0 && <small className="teacher-assignment-summary">{assignments[teacher.name].join(", ")}</small>}</div>
+            <div><p className="eyebrow">DOCENTE</p><h2>{teacher.name}</h2><span className={`staff-status ${teacher.status === "Activo" ? "active" : "inactive"}`}><i></i>{teacher.status}</span>{[...new Set(assignments[teacher.name] || [])].length > 0 && <small className="teacher-assignment-summary">{[...new Set(assignments[teacher.name] || [])].join(", ")}</small>}</div>
           </div>
           <div className="teacher-management-actions">
             <button className={teacher.status === "Activo" ? "temporary-button" : "restore-button"} onClick={() => toggleStatus(teacher)} disabled={isPending}><Icon name={teacher.status === "Activo" ? "clock" : "check"} size={17} /> {teacher.status === "Activo" ? "Dar de baja temporal" : "Reactivar docente"}</button>
             <button className="permanent-delete-button" onClick={() => deleteTeacher(teacher.name)} disabled={isPending}><Icon name="trash" size={17} /> Eliminar definitivamente</button>
           </div>
-          {(assignments[teacher.name] || []).length > 0 && (
+          {[...new Set(assignments[teacher.name] || [])].length > 0 && (
             <div className="assigned-groups">
-              {(assignments[teacher.name] || []).map((group) => (
+              {[...new Set(assignments[teacher.name] || [])].map((group) => (
                 <div className="assigned-group" key={group}>
                   <span><Icon name="users" size={17} /> {group}</span>
                   <button onClick={() => unassignGroup(teacher.name, group)} disabled={isPending} aria-label={`Quitar ${group} de ${teacher.name}`}><Icon name="close" size={15} /></button>
@@ -1797,7 +1785,6 @@ function TeacherGroupManagement({
         setError(result.error ?? "No fue posible asignar el grupo.");
         return;
       }
-      setAssignments((current) => ({ ...current, [teacher]: [...(current[teacher] || []), group] }));
       setSelectedGroups((current) => ({ ...current, [teacher]: "" }));
       setNotice(`${group} fue asignado a ${teacher}.`);
     });
@@ -1824,7 +1811,6 @@ function TeacherGroupManagement({
         setError(result.error ?? "No fue posible retirar el grupo.");
         return;
       }
-      setAssignments((current) => ({ ...current, [teacher]: (current[teacher] || []).filter((option) => option !== group) }));
       setNotice(`${group} fue eliminado de las asignaciones de ${teacher}.`);
     });
   };
@@ -1840,7 +1826,7 @@ function TeacherGroupManagement({
       {error && <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>No se pudo actualizar</strong><p>{error}</p></div></div>}
       <div className="teacher-group-grid">
         {teachers.map((teacher) => {
-          const teacherGroups = assignments[teacher.name] || [];
+          const teacherGroups = [...new Set(assignments[teacher.name] || [])];
           const unassignedGroups = allGroups.filter((group) => !teacherGroups.includes(group));
           return <section className="panel teacher-group-card" key={teacher.name}>
             <div className="teacher-group-identity">
