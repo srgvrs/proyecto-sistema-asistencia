@@ -14,6 +14,8 @@ import { Groups } from './collections/Groups'
 import { Attendance } from './collections/Attendance'
 import { Visitors } from './collections/Visitors'
 import { OfficialLists } from './collections/OfficialLists'
+import { TeacherAttendance } from './collections/TeacherAttendance'
+import { TeacherJustifications } from './collections/TeacherJustifications'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -49,6 +51,8 @@ export default buildFigmaConfig({
     Attendance,
     Visitors,
     OfficialLists,
+    TeacherAttendance,
+    TeacherJustifications,
   ],
   globals: [],
   typescript: {

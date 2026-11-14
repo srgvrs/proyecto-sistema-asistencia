@@ -10,6 +10,8 @@ import type {
   SchoolStateData,
   Status,
   Student,
+  TeacherAttendance,
+  TeacherProfile,
   Visitor,
 } from "@/lib/school-data-types"
 
@@ -95,6 +97,28 @@ type OfficialListDoc = {
   group: string | { id: string; name: string }
   file?: string | { id: string; url?: string | null } | null
   marks?: Record<string, Record<string, "." | "X">> | null
+}
+
+type TeacherAttendanceDoc = {
+  id: string
+  teacher: string | { id: string; name?: string }
+  date: string
+  entryTime: string
+  exitTime?: string | null
+}
+
+type TeacherJustificationDoc = {
+  id: string
+  teacher: string | { id: string; name?: string }
+  date: string
+  reason?: string | null
+}
+
+type TeacherUserDoc = {
+  id: string
+  name: string
+  role: "Directivo" | "Docente" | "Vigilante de Acceso"
+  employmentStatus?: "Activo" | "Baja temporal" | null
 }
 
 const getRelationId = (value: string | { id: string } | null | undefined): string => {
@@ -369,12 +393,31 @@ export async function loadSchoolStateAction(): Promise<
   try {
     const payload = await getPayload({ config })
 
-    const [groupsResult, studentsResult, attendanceResult, visitorsResult, officialListsResult] = await Promise.all([
+    const [
+      groupsResult,
+      studentsResult,
+      attendanceResult,
+      visitorsResult,
+      officialListsResult,
+      teachersResult,
+      teacherAttendanceResult,
+      teacherJustificationsResult,
+    ] = await Promise.all([
       payload.find({ collection: "groups", limit: 200, sort: "name", overrideAccess: false, user }),
       payload.find({ collection: "students", limit: 2000, sort: "lastName", overrideAccess: false, user }),
       payload.find({ collection: "attendance", limit: 5000, sort: "-date", overrideAccess: false, user }),
       payload.find({ collection: "visitors", limit: 500, sort: "-entryTime", overrideAccess: false, user }),
       payload.find({ collection: "official-lists", limit: 200, sort: "-createdAt", overrideAccess: false, user }),
+      payload.find({
+        collection: "users",
+        where: { role: { equals: "Docente" } },
+        limit: 500,
+        sort: "name",
+        overrideAccess: false,
+        user,
+      }),
+      payload.find({ collection: "teacher-attendance", limit: 2000, sort: "-date", overrideAccess: false, user }),
+      payload.find({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
     ])
 
     const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: group.id, name: group.name }))
@@ -389,6 +432,49 @@ export async function loadSchoolStateAction(): Promise<
     const visitors = (visitorsResult.docs as VisitorDoc[]).map(mapVisitorDoc)
     const officialAttendanceLists = (officialListsResult.docs as OfficialListDoc[]).map(mapOfficialListDoc)
 
+    const teacherDocs = teachersResult.docs as TeacherUserDoc[]
+    const justificationsByTeacher = new Map<string, string[]>()
+    for (const doc of teacherJustificationsResult.docs as TeacherJustificationDoc[]) {
+      const teacherId = getRelationId(doc.teacher)
+      const list = justificationsByTeacher.get(teacherId) || []
+      list.push(toISODate(doc.date))
+      justificationsByTeacher.set(teacherId, list)
+    }
+    const teachers: TeacherProfile[] = teacherDocs.map((doc) => {
+      const parts = splitStudentName(doc.name, "")
+      return {
+        name: doc.name,
+        givenNames: parts.givenNames,
+        paternalSurname: "",
+        maternalSurname: "",
+        status: doc.employmentStatus === "Baja temporal" ? "Baja temporal" : "Activo",
+        justifiedDates: (justificationsByTeacher.get(doc.id) || []).sort().reverse(),
+      }
+    })
+
+    const teacherGroups: Record<string, string[]> = {}
+    for (const group of groupsResult.docs as GroupDoc[]) {
+      const teacherId = getRelationId(group.teacher)
+      if (!teacherId) continue
+      const teacherDoc = teacherDocs.find((doc) => doc.id === teacherId)
+      if (!teacherDoc) continue
+      const list = teacherGroups[teacherDoc.name] || []
+      list.push(group.name)
+      teacherGroups[teacherDoc.name] = list
+    }
+
+    const teacherAttendance: TeacherAttendance[] = (teacherAttendanceResult.docs as TeacherAttendanceDoc[]).map((doc, index) => {
+      const teacherId = getRelationId(doc.teacher)
+      const teacherDoc = teacherDocs.find((item) => item.id === teacherId)
+      return {
+        id: index + 1,
+        teacher: teacherDoc?.name || getRelationName(doc.teacher),
+        date: toISODate(doc.date),
+        entryTime: toHHMM(doc.entryTime),
+        exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
+      }
+    })
+
     return {
       ok: true,
       data: {
@@ -397,9 +483,9 @@ export async function loadSchoolStateAction(): Promise<
         attendanceRecords,
         officialAttendanceLists,
         visitors,
-        teacherAttendance: [],
-        teacherGroups: {},
-        teachers: [],
+        teacherAttendance,
+        teacherGroups,
+        teachers,
       },
     }
   } catch {
@@ -736,6 +822,192 @@ export async function deleteVisitorAction(
     return { ok: true }
   } catch {
     return { ok: false, error: "No fue posible eliminar al visitante." }
+  }
+}
+
+type TeacherAttendanceInput = {
+  teacherId: string
+  date: string
+  entryTime: string
+  exitTime?: string | null
+}
+
+export async function createTeacherAttendanceAction(
+  input: TeacherAttendanceInput,
+): Promise<{ ok: true; record: TeacherAttendance } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
+    return { ok: false, error: "No tienes permiso para registrar asistencia docente." }
+  }
+  if (!isString(input.teacherId) || !isISODate(input.date) || !isISODateTime(input.entryTime)) {
+    return { ok: false, error: "Los datos de asistencia docente no son válidos." }
+  }
+  if (user.role === "Docente" && user.id !== input.teacherId) {
+    return { ok: false, error: "Solo puedes registrar tu propia asistencia." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    const doc = await payload.create({
+      collection: "teacher-attendance",
+      data: {
+        teacher: input.teacherId,
+        date: `${input.date}T00:00:00.000Z`,
+        entryTime: input.entryTime,
+        exitTime: input.exitTime || null,
+      },
+      overrideAccess: false,
+      user,
+    })
+    const created = doc as TeacherAttendanceDoc
+    return {
+      ok: true,
+      record: {
+        id: 0,
+        teacher: getRelationName(created.teacher),
+        date: toISODate(created.date),
+        entryTime: toHHMM(created.entryTime),
+        exitTime: created.exitTime ? toHHMM(created.exitTime) : null,
+      },
+    }
+  } catch {
+    return { ok: false, error: "No fue posible registrar la asistencia docente." }
+  }
+}
+
+export async function updateTeacherAttendanceAction(
+  id: string,
+  input: { exitTime?: string | null },
+): Promise<{ ok: true; record: TeacherAttendance } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
+    return { ok: false, error: "No tienes permiso para actualizar asistencia docente." }
+  }
+  if (!isString(id)) return { ok: false, error: "Identificador inválido." }
+  const data: Record<string, unknown> = {}
+  if (input.exitTime !== undefined) {
+    if (input.exitTime !== null && !isISODateTime(input.exitTime)) {
+      return { ok: false, error: "La hora de salida no es válida." }
+    }
+    data.exitTime = input.exitTime
+  }
+  if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
+  try {
+    const payload = await getPayload({ config })
+    const doc = await payload.update({
+      collection: "teacher-attendance",
+      id,
+      data,
+      overrideAccess: false,
+      user,
+    })
+    const updated = doc as TeacherAttendanceDoc
+    return {
+      ok: true,
+      record: {
+        id: 0,
+        teacher: getRelationName(updated.teacher),
+        date: toISODate(updated.date),
+        entryTime: toHHMM(updated.entryTime),
+        exitTime: updated.exitTime ? toHHMM(updated.exitTime) : null,
+      },
+    }
+  } catch {
+    return { ok: false, error: "No fue posible actualizar la asistencia docente." }
+  }
+}
+
+type TeacherJustificationInput = {
+  teacherId: string
+  date: string
+  reason?: string
+}
+
+export async function createTeacherJustificationAction(
+  input: TeacherJustificationInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede registrar justificantes." }
+  }
+  if (!isString(input.teacherId) || !isISODate(input.date)) {
+    return { ok: false, error: "Los datos del justificante no son válidos." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    await payload.create({
+      collection: "teacher-justifications",
+      data: {
+        teacher: input.teacherId,
+        date: `${input.date}T00:00:00.000Z`,
+        reason: input.reason?.trim() || undefined,
+        createdByUser: user.id,
+      },
+      overrideAccess: false,
+      user,
+    })
+    return { ok: true }
+  } catch {
+    return { ok: false, error: "No fue posible registrar el justificante." }
+  }
+}
+
+export async function deleteTeacherJustificationAction(
+  teacherId: string,
+  date: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede eliminar justificantes." }
+  }
+  if (!isString(teacherId) || !isISODate(date)) {
+    return { ok: false, error: "Los datos del justificante no son válidos." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    const existing = await payload.find({
+      collection: "teacher-justifications",
+      where: {
+        and: [
+          { teacher: { equals: teacherId } },
+          { date: { equals: `${date}T00:00:00.000Z` } },
+        ],
+      },
+      limit: 1,
+      overrideAccess: false,
+      user,
+    })
+    const doc = existing.docs[0]
+    if (!doc) return { ok: false, error: "El justificante no existe." }
+    await payload.delete({ collection: "teacher-justifications", id: doc.id, overrideAccess: false, user })
+    return { ok: true }
+  } catch {
+    return { ok: false, error: "No fue posible eliminar el justificante." }
+  }
+}
+
+export async function updateTeacherEmploymentStatusAction(
+  teacherId: string,
+  status: "Activo" | "Baja temporal",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede cambiar el estado laboral." }
+  }
+  if (!isString(teacherId) || (status !== "Activo" && status !== "Baja temporal")) {
+    return { ok: false, error: "Los datos del docente no son válidos." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    await payload.update({
+      collection: "users",
+      id: teacherId,
+      data: { employmentStatus: status },
+      overrideAccess: false,
+      user,
+    })
+    return { ok: true }
+  } catch {
+    return { ok: false, error: "No fue posible actualizar el estado del docente." }
   }
 }
 

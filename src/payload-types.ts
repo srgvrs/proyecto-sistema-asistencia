@@ -91,6 +91,8 @@ export interface Config {
     attendance: Attendance;
     visitors: Visitor;
     'official-lists': OfficialList;
+    'teacher-attendance': TeacherAttendance;
+    'teacher-justifications': TeacherJustification;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -110,6 +112,8 @@ export interface Config {
     attendance: AttendanceSelect<false> | AttendanceSelect<true>;
     visitors: VisitorsSelect<false> | VisitorsSelect<true>;
     'official-lists': OfficialListsSelect<false> | OfficialListsSelect<true>;
+    'teacher-attendance': TeacherAttendanceSelect<false> | TeacherAttendanceSelect<true>;
+    'teacher-justifications': TeacherJustificationsSelect<false> | TeacherJustificationsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -211,6 +215,7 @@ export interface User {
   id: string;
   name: string;
   role: 'Directivo' | 'Docente' | 'Vigilante de Acceso';
+  employmentStatus?: ('Activo' | 'Baja temporal') | null;
   createdBy?:
     | ({
         relationTo: 'admins';
@@ -580,6 +585,68 @@ export interface OfficialList {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "teacher-attendance".
+ */
+export interface TeacherAttendance {
+  id: string;
+  teacher: string | User;
+  date: string;
+  entryTime: string;
+  exitTime?: string | null;
+  createdBy?:
+    | ({
+        relationTo: 'admins';
+        value: string | Admin;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: string | User;
+      } | null);
+  updatedBy?:
+    | ({
+        relationTo: 'admins';
+        value: string | Admin;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: string | User;
+      } | null);
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "teacher-justifications".
+ */
+export interface TeacherJustification {
+  id: string;
+  teacher: string | User;
+  date: string;
+  reason?: string | null;
+  createdByUser: string | User;
+  createdBy?:
+    | ({
+        relationTo: 'admins';
+        value: string | Admin;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: string | User;
+      } | null);
+  updatedBy?:
+    | ({
+        relationTo: 'admins';
+        value: string | Admin;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: string | User;
+      } | null);
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -830,6 +897,7 @@ export interface ReportTemplatesSelect<T extends boolean = true> {
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
+  employmentStatus?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -916,6 +984,34 @@ export interface OfficialListsSelect<T extends boolean = true> {
   group?: T;
   file?: T;
   marks?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "teacher-attendance_select".
+ */
+export interface TeacherAttendanceSelect<T extends boolean = true> {
+  teacher?: T;
+  date?: T;
+  entryTime?: T;
+  exitTime?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "teacher-justifications_select".
+ */
+export interface TeacherJustificationsSelect<T extends boolean = true> {
+  teacher?: T;
+  date?: T;
+  reason?: T;
+  createdByUser?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;

@@ -50,6 +50,18 @@ export const Users: CollectionConfig = {
       options: ["Directivo", "Docente", "Vigilante de Acceso"],
       saveToJWT: true,
     },
+    {
+      name: "employmentStatus",
+      label: "Estado laboral",
+      type: "select",
+      required: false,
+      defaultValue: "Activo",
+      options: ["Activo", "Baja temporal"],
+      admin: {
+        description: "Solo aplica a docentes. Los directivos y vigilantes permanecen como Activo.",
+        condition: (data) => data?.role === "Docente",
+      },
+    },
   ],
   versions: false,
 }
