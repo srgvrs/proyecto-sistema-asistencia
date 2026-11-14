@@ -2,6 +2,7 @@ import type { Access, CollectionConfig } from "payload"
 import { isDirectivo } from "../access"
 
 const readTeacherAttendance: Access = ({ req }) => {
+  if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
   if (req.user.role === "Directivo") return true
   if (req.user.role === "Docente") {

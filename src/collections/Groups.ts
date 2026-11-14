@@ -16,6 +16,7 @@ const validateTeacherRole: Validate = async (value, { req }) => {
 }
 
 const readGroups: Access = ({ req }) => {
+  if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
   if (req.user.role === "Directivo") return true
   if (req.user.role === "Vigilante de Acceso") return true
