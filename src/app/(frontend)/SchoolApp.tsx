@@ -304,19 +304,6 @@ function App({
     }
   }, [refreshSchoolState]);
 
-  useEffect(() => {
-    if (!session) return;
-    void refreshSchoolState();
-    const interval = window.setInterval(refreshSchoolState, 5000);
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refreshSchoolState();
-    };
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [refreshSchoolState, session]);
 
   if (!session) {
     return <Login onLogin={(user, availableUsers) => { setSession(user); setUsers(availableUsers); setView("inicio"); }} />;
