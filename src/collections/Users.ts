@@ -1,9 +1,12 @@
 import type { Access, CollectionConfig } from "payload"
 
-const isDirectivo: Access = ({ req }) =>
-  req.user?.collection === "users" && req.user.role === "Directivo"
+const isDirectivo: Access = ({ req }) => {
+  if (req.user?.collection === "admins") return true
+  return req.user?.collection === "users" && req.user.role === "Directivo"
+}
 
 const directivoOrSelf: Access = ({ req }) => {
+  if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
   if (req.user.role === "Directivo") return true
   return { id: { equals: req.user.id } }
