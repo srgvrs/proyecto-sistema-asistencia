@@ -416,7 +416,7 @@ export async function loadSchoolStateAction(): Promise<
       payload.find({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
     ])
 
-    const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: group.id, name: group.name }))
+    const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: String(group.id), name: group.name }))
     const studentsByGroup = new Map<string, number>()
     const students: Student[] = (studentsResult.docs as StudentDoc[]).map((doc) => {
       const groupName = getRelationName(doc.group)
@@ -838,7 +838,7 @@ export async function createTeacherAttendanceAction(
   if (!isString(input.teacherId) || !isISODate(input.date) || !isISODateTime(input.entryTime)) {
     return { ok: false, error: "Los datos de asistencia docente no son válidos." }
   }
-  if (user.role === "Docente" && user.id !== input.teacherId) {
+  if (user.role === "Docente" && String(user.id) !== input.teacherId) {
     return { ok: false, error: "Solo puedes registrar tu propia asistencia." }
   }
   try {
