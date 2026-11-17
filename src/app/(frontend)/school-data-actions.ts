@@ -248,6 +248,7 @@ const monthFromTitle = (title: string): string => {
 const mapOfficialListDoc = (
   doc: OfficialListDoc,
   groupStudents?: Student[],
+  groupTeacherName?: string,
 ): OfficialAttendanceList => {
   const marks = (doc.marks && typeof doc.marks === "object" && !Array.isArray(doc.marks))
     ? (doc.marks as Record<string, Record<string, "." | "X">>)
@@ -258,11 +259,14 @@ const mapOfficialListDoc = (
   const roster = parseRoster(doc.roster)
     ?? (groupStudents && groupStudents.length ? buildRosterFromStudents(groupStudents) : [])
   const month = officialDates[0]?.slice(0, 7) || monthFromTitle(doc.title) || ""
+  const teacher = (typeof doc.teacherName === "string" && doc.teacherName.trim())
+    ? doc.teacherName
+    : (groupTeacherName ?? "")
   return {
     id: String(doc.id),
     group: getRelationName(doc.group),
     month,
-    teacher: doc.teacherName ?? "",
+    teacher,
     officialDates,
     students: roster,
     marks,
@@ -543,8 +547,22 @@ export async function loadSchoolStateAction(): Promise<
       list.push(student)
       studentsByGroupName.set(student.group, list)
     }
+    const teacherNameById = new Map<string, string>(
+      (teachersResult.docs as TeacherUserDoc[]).map((doc) => [String(doc.id), doc.name]),
+    )
+    const groupTeacherNameById = new Map<string, string>()
+    for (const group of groupsResult.docs as GroupDoc[]) {
+      const teacherId = getRelationId(group.teacher)
+      if (!teacherId) continue
+      const teacherName = teacherNameById.get(teacherId)
+      if (teacherName) groupTeacherNameById.set(String(group.id), teacherName)
+    }
     const officialAttendanceLists = (officialListsResult.docs as OfficialListDoc[]).map((doc) =>
-      mapOfficialListDoc(doc, studentsByGroupName.get(getRelationName(doc.group))),
+      mapOfficialListDoc(
+        doc,
+        studentsByGroupName.get(getRelationName(doc.group)),
+        groupTeacherNameById.get(getRelationId(doc.group)),
+      ),
     )
 
     const teacherDocs = teachersResult.docs as TeacherUserDoc[]

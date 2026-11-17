@@ -2087,7 +2087,7 @@ function OfficialAttendanceSheet({ list }: { list: OfficialAttendanceList }) {
       <footer className="official-sheet-footer">
         <span>Vo. Bo.</span>
         <div>
-          <section><strong>MAESTRO DE GRUPO</strong><span className="signature-line"></span><b>PROF. {list.teacher.toUpperCase()}</b></section>
+          <section><strong>MAESTRO DE GRUPO</strong><span className="signature-line"></span>{list.teacher ? <b>PROF. {list.teacher.toUpperCase()}</b> : null}</section>
           <section><strong>DIRECTOR DE LA ESCUELA</strong><span className="signature-line"></span><b>{SCHOOL_DIRECTOR}</b></section>
         </div>
       </footer>
