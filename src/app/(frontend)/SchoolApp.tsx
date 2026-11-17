@@ -1067,7 +1067,8 @@ function StudentManagement({
       startTransition(async () => {
         const result = await createStudentAction({
           firstName: givenNames.trim(),
-          lastName: `${paternalSurname.trim()} ${maternalSurname.trim()}`.trim(),
+          paternalSurname: paternalSurname.trim(),
+          maternalSurname: maternalSurname.trim(),
           matricula: `${group.replace(/\s+/g, "")}-${listNumber}`,
           groupId: groupDoc.id,
         });
@@ -1240,7 +1241,8 @@ function GroupStudentManagement({
       startTransition(async () => {
         const result = await createStudentAction({
           firstName: givenNames.trim(),
-          lastName: `${paternalSurname.trim()} ${maternalSurname.trim()}`.trim(),
+          paternalSurname: paternalSurname.trim(),
+          maternalSurname: maternalSurname.trim(),
           matricula: `${groupDoc.name.replace(/\s+/g, "")}-${listNumber}`,
           groupId: groupDoc.id,
         });
