@@ -1,26 +1,45 @@
+# Dependencias y build
 node_modules/
 .next/
 out/
 dist/
 build/
 .cache/
-.env*
-next-env.d.ts
 *.tsbuildinfo
-*-debug.log*
+next-env.d.ts
+
+# Secretos y variables de entorno
+.env
+.env*
+!.env.example
+
+# Base de datos local (datos reales de alumnos y usuarios)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Entorno virtual de Python
+venv/
+.venv/
+
+# Logs, temporales y backups
 logs/
 *.log
+*-debug.log*
+*.bak
+.tmp-*
+
+# Herramientas de IA, agentes y plataforma
+.aider*
 .claude-replay.*
 .figma/runtime/
-.tmp-*
 /.figma/design-context/
-
-# Platform-managed agentplat state, not project source. In the
-# client-initiated single-repo workspace layout (make's `Path: "."` spec) the
-# repo root IS the workspace root, so these land inside this repo rather than
-# beside it.
 /.plugins/
 /.opencode-skills/
-.aider*
-*.db
-.venv/ 
+
+# Sistema operativo y editor
+.DS_Store
+Thumbs.db
+.vscode/

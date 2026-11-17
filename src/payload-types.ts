@@ -424,6 +424,7 @@ export interface Student {
   firstName: string;
   paternalSurname: string;
   maternalSurname?: string | null;
+  lastName?: string | null;
   matricula: string;
   group: number | Group;
   createdBy?:
@@ -561,6 +562,19 @@ export interface OfficialList {
     | number
     | boolean
     | null;
+  /**
+   * Arreglo de alumnos al momento de oficializar. Ej: [{ "studentId": "1", "name": "...", "listNumber": 1 }]
+   */
+  roster?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  teacherName?: string | null;
   createdBy?:
     | ({
         relationTo: 'admins';
@@ -960,6 +974,7 @@ export interface StudentsSelect<T extends boolean = true> {
   firstName?: T;
   paternalSurname?: T;
   maternalSurname?: T;
+  lastName?: T;
   matricula?: T;
   group?: T;
   createdBy?: T;
@@ -1018,6 +1033,8 @@ export interface OfficialListsSelect<T extends boolean = true> {
   group?: T;
   file?: T;
   marks?: T;
+  roster?: T;
+  teacherName?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
