@@ -1,5 +1,15 @@
-import type { CollectionConfig } from "payload"
+import type { Access, CollectionConfig } from "payload"
 import { isDirectivo, isStaff } from "../access"
+
+const updateOfficialList: Access = ({ req }) => {
+  if (req.user?.collection === "admins") return true
+  if (req.user?.collection !== "users") return false
+  if (req.user.role === "Directivo") return true
+  if (req.user.role === "Docente") {
+    return { "group.teacher": { equals: req.user.id } }
+  }
+  return false
+}
 
 export const OfficialLists: CollectionConfig = {
   slug: "official-lists",
@@ -14,9 +24,42 @@ export const OfficialLists: CollectionConfig = {
   },
   access: {
     read: isStaff,
-    create: isDirectivo,
-    update: isDirectivo,
+    create: isStaff,
+    update: updateOfficialList,
     delete: isDirectivo,
+  },
+  hooks: {
+    beforeValidate: [
+      async ({ data, req, operation }) => {
+        if (operation !== "create") return data
+        if (req.user?.collection === "admins") return data
+        if (req.user?.collection !== "users") {
+          throw new Error("No tienes permiso para crear listas oficiales.")
+        }
+        if (req.user.role === "Directivo") return data
+        if (req.user.role !== "Docente") {
+          throw new Error("No tienes permiso para crear listas oficiales.")
+        }
+        const groupId = data?.group
+        if (groupId === null || groupId === undefined) {
+          throw new Error("La lista oficial debe tener un grupo.")
+        }
+        const group = await req.payload.findByID({
+          collection: "groups",
+          id: typeof groupId === "object" ? (groupId as { id: number }).id : groupId,
+          depth: 0,
+          overrideAccess: true,
+        })
+        const teacherId =
+          group?.teacher && typeof group.teacher === "object"
+            ? (group.teacher as { id: number }).id
+            : group?.teacher
+        if (String(teacherId ?? "") !== String(req.user.id)) {
+          throw new Error("Solo puedes crear listas oficiales de tus grupos asignados.")
+        }
+        return data
+      },
+    ],
   },
   fields: [
     {
