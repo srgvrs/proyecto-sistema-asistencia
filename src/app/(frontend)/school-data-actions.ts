@@ -260,7 +260,7 @@ export async function officializeAttendanceAction(
       collection: "students",
       where: { group: { equals: groupDoc.id } },
       limit: 500,
-      sort: "lastName",
+      sort: "paternalSurname",
       overrideAccess: false,
       user,
     })
@@ -454,7 +454,7 @@ export async function loadSchoolStateAction(): Promise<
       teacherJustificationsResult,
     ] = await Promise.all([
       safeFind({ collection: "groups", limit: 200, sort: "name", overrideAccess: false, user }),
-      safeFind({ collection: "students", limit: 2000, sort: "lastName", overrideAccess: false, user }),
+      safeFind({ collection: "students", limit: 2000, sort: "paternalSurname", overrideAccess: false, user }),
       safeFind({ collection: "attendance", limit: 5000, sort: "-date", overrideAccess: false, user }),
       safeFind({ collection: "visitors", limit: 500, sort: "-entryTime", overrideAccess: false, user }),
       safeFind({ collection: "official-lists", limit: 200, sort: "-createdAt", overrideAccess: false, user }),

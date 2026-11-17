@@ -424,7 +424,6 @@ export interface Student {
   firstName: string;
   paternalSurname: string;
   maternalSurname?: string | null;
-  lastName?: string | null;
   matricula: string;
   group: number | Group;
   createdBy?:
@@ -961,7 +960,6 @@ export interface StudentsSelect<T extends boolean = true> {
   firstName?: T;
   paternalSurname?: T;
   maternalSurname?: T;
-  lastName?: T;
   matricula?: T;
   group?: T;
   createdBy?: T;
