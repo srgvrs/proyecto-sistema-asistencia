@@ -93,6 +93,8 @@ type OfficialListDoc = {
   group: number | { id: number; name: string }
   file?: number | { id: number; url?: string | null } | null
   marks?: Record<string, Record<string, "." | "X">> | null
+  roster?: unknown
+  teacherName?: string | null
 }
 
 type TeacherAttendanceDoc = {
@@ -196,20 +198,73 @@ const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
   exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
 })
 
-const mapOfficialListDoc = (doc: OfficialListDoc): OfficialAttendanceList => {
+const parseRoster = (value: unknown): OfficialAttendanceStudent[] | null => {
+  if (!Array.isArray(value)) return null
+  const roster: OfficialAttendanceStudent[] = []
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue
+    const entry = item as { studentId?: unknown; name?: unknown; listNumber?: unknown }
+    if (typeof entry.studentId !== "string" || typeof entry.name !== "string") continue
+    const listNumber = typeof entry.listNumber === "number" ? entry.listNumber : Number(entry.listNumber)
+    if (!Number.isFinite(listNumber)) continue
+    roster.push({ studentId: entry.studentId, name: entry.name, listNumber })
+  }
+  return roster.length ? roster : null
+}
+
+const buildRosterFromStudents = (students: Student[]): OfficialAttendanceStudent[] =>
+  students
+    .slice()
+    .sort((a, b) => {
+      const options = { sensitivity: "base" as const }
+      return (
+        (a.paternalSurname ?? "").localeCompare(b.paternalSurname ?? "", "es-MX", options) ||
+        (a.maternalSurname ?? "").localeCompare(b.maternalSurname ?? "", "es-MX", options) ||
+        (a.givenNames ?? "").localeCompare(b.givenNames ?? "", "es-MX", options)
+      )
+    })
+    .map((student, index) => ({
+      studentId: student.id,
+      name: student.name,
+      listNumber: index + 1,
+    }))
+
+const monthFromTitle = (title: string): string => {
+  const match = /(\d{4})-(\d{2})/.exec(title)
+  if (match) return `${match[1]}-${match[2]}`
+  const months = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ]
+  const lower = title.toLowerCase()
+  const monthIndex = months.findIndex((name) => lower.includes(name))
+  const yearMatch = /(\d{4})/.exec(title)
+  if (monthIndex >= 0 && yearMatch) {
+    return `${yearMatch[1]}-${String(monthIndex + 1).padStart(2, "0")}`
+  }
+  return ""
+}
+
+const mapOfficialListDoc = (
+  doc: OfficialListDoc,
+  groupStudents?: Student[],
+): OfficialAttendanceList => {
   const marks = (doc.marks && typeof doc.marks === "object" && !Array.isArray(doc.marks))
     ? (doc.marks as Record<string, Record<string, "." | "X">>)
     : {}
   const officialDates = [...new Set(
     Object.values(marks).flatMap((studentMarks) => Object.keys(studentMarks || {})),
   )].sort()
+  const roster = parseRoster(doc.roster)
+    ?? (groupStudents && groupStudents.length ? buildRosterFromStudents(groupStudents) : [])
+  const month = officialDates[0]?.slice(0, 7) || monthFromTitle(doc.title) || ""
   return {
     id: String(doc.id),
     group: getRelationName(doc.group),
-    month: officialDates[0]?.slice(0, 7) || "",
-    teacher: "",
+    month,
+    teacher: doc.teacherName ?? "",
     officialDates,
-    students: [],
+    students: roster,
     marks,
     updatedAt: new Date().toISOString(),
   }
@@ -358,12 +413,21 @@ export async function officializeAttendanceAction(
       ...Object.values(marks).flatMap((studentMarks) => Object.keys(studentMarks || {})),
     ])].sort()
 
+    const roster: OfficialAttendanceStudent[] = groupStudents.map((student, index) => {
+      const parts = resolveStudentNameParts(student)
+      return {
+        studentId: String(student.id),
+        name: buildStudentName(parts.givenNames, parts.paternalSurname, parts.maternalSurname),
+        listNumber: index + 1,
+      }
+    })
+
     let officialListId: string
     if (existingList) {
       const updated = await payload.update({
         collection: "official-lists",
         id: existingList.id,
-        data: { marks },
+        data: { marks, roster, teacherName: user.name },
         overrideAccess: false,
         user,
       })
@@ -375,6 +439,8 @@ export async function officializeAttendanceAction(
           title,
           group: groupDoc.id,
           marks,
+          roster,
+          teacherName: user.name,
         },
         overrideAccess: false,
         user,
@@ -389,14 +455,7 @@ export async function officializeAttendanceAction(
         month,
         teacher: user.name,
         officialDates,
-        students: groupStudents.map((student, index) => {
-          const parts = resolveStudentNameParts(student)
-          return {
-            studentId: String(student.id),
-            name: buildStudentName(parts.givenNames, parts.paternalSurname, parts.maternalSurname),
-            listNumber: index + 1,
-          }
-        }),
+        students: roster,
         marks,
         updatedAt: new Date().toISOString(),
       },
@@ -478,7 +537,15 @@ export async function loadSchoolStateAction(): Promise<
     })
     const attendanceRecords = (attendanceResult.docs as AttendanceDoc[]).map(mapAttendanceDoc)
     const visitors = (visitorsResult.docs as VisitorDoc[]).map(mapVisitorDoc)
-    const officialAttendanceLists = (officialListsResult.docs as OfficialListDoc[]).map(mapOfficialListDoc)
+    const studentsByGroupName = new Map<string, Student[]>()
+    for (const student of students) {
+      const list = studentsByGroupName.get(student.group) || []
+      list.push(student)
+      studentsByGroupName.set(student.group, list)
+    }
+    const officialAttendanceLists = (officialListsResult.docs as OfficialListDoc[]).map((doc) =>
+      mapOfficialListDoc(doc, studentsByGroupName.get(getRelationName(doc.group))),
+    )
 
     const teacherDocs = teachersResult.docs as TeacherUserDoc[]
     const justificationsByTeacher = new Map<string, string[]>()
