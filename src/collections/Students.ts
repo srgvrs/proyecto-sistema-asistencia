@@ -10,7 +10,7 @@ export const Students: CollectionConfig = {
   admin: {
     group: "Control escolar",
     useAsTitle: "matricula",
-    defaultColumns: ["matricula", "firstName", "lastName", "group"],
+    defaultColumns: ["matricula", "paternalSurname", "maternalSurname", "firstName", "group"],
   },
   access: {
     read: isStaff,
@@ -26,10 +26,22 @@ export const Students: CollectionConfig = {
       required: true,
     },
     {
+      name: "paternalSurname",
+      label: "Apellido paterno",
+      type: "text",
+      required: true,
+    },
+    {
+      name: "maternalSurname",
+      label: "Apellido materno",
+      type: "text",
+      required: false,
+    },
+    {
       name: "lastName",
       label: "Apellidos",
       type: "text",
-      required: true,
+      required: false,
     },
     {
       name: "matricula",

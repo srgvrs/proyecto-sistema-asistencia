@@ -56,7 +56,9 @@ const mapStatusFromCollection = (status: string): Status => {
 type StudentDoc = {
   id: number
   firstName: string
-  lastName: string
+  lastName?: string | null
+  paternalSurname?: string | null
+  maternalSurname?: string | null
   matricula: string
   group: number | { id: number; name: string }
 }
@@ -142,20 +144,31 @@ const splitStudentName = (firstName: string, lastName: string) => {
   }
 }
 
-const buildStudentName = (firstName: string, lastName: string) =>
-  `${lastName.trim()} ${firstName.trim()}`.replace(/\s+/g, " ").trim()
+const resolveStudentNameParts = (doc: StudentDoc) => {
+  const fallback = splitStudentName(doc.firstName, doc.lastName ?? "")
+  const paternalSurname = (doc.paternalSurname ?? "").trim() || fallback.paternalSurname
+  const maternalSurname = (doc.maternalSurname ?? "").trim() || fallback.maternalSurname
+  return {
+    givenNames: doc.firstName.trim(),
+    paternalSurname,
+    maternalSurname,
+  }
+}
+
+const buildStudentName = (firstName: string, paternalSurname: string, maternalSurname: string) =>
+  `${paternalSurname} ${maternalSurname} ${firstName}`.replace(/\s+/g, " ").trim()
 
 const mapStudentDoc = (
   doc: StudentDoc,
   listNumber: number,
   groupsById?: Map<string, string>,
 ): Student => {
-  const parts = splitStudentName(doc.firstName, doc.lastName)
+  const parts = resolveStudentNameParts(doc)
   const groupId = getRelationId(doc.group)
   const groupName = groupsById?.get(groupId) || getRelationName(doc.group)
   return {
     id: String(doc.id),
-    name: buildStudentName(doc.firstName, doc.lastName),
+    name: buildStudentName(parts.givenNames, parts.paternalSurname, parts.maternalSurname),
     listNumber,
     givenNames: parts.givenNames,
     paternalSurname: parts.paternalSurname,
@@ -376,11 +389,14 @@ export async function officializeAttendanceAction(
         month,
         teacher: user.name,
         officialDates,
-        students: groupStudents.map((student, index) => ({
-          studentId: String(student.id),
-          name: buildStudentName(student.firstName, student.lastName),
-          listNumber: index + 1,
-        })),
+        students: groupStudents.map((student, index) => {
+          const parts = resolveStudentNameParts(student)
+          return {
+            studentId: String(student.id),
+            name: buildStudentName(parts.givenNames, parts.paternalSurname, parts.maternalSurname),
+            listNumber: index + 1,
+          }
+        }),
         marks,
         updatedAt: new Date().toISOString(),
       },
@@ -528,7 +544,9 @@ export async function loadSchoolStateAction(): Promise<
 
 type StudentInput = {
   firstName: string
-  lastName: string
+  paternalSurname: string
+  maternalSurname?: string
+  lastName?: string
   matricula: string
   groupId: string
 }
@@ -540,7 +558,13 @@ export async function createStudentAction(
   if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para crear alumnos." }
   }
-  if (!isString(input.firstName) || !isString(input.lastName) || !isString(input.matricula) || !isString(input.groupId)) {
+  if (!isString(input.firstName) || !isString(input.paternalSurname) || !isString(input.matricula) || !isString(input.groupId)) {
+    return { ok: false, error: "Los datos del alumno no son válidos." }
+  }
+  if (input.maternalSurname !== undefined && !isString(input.maternalSurname)) {
+    return { ok: false, error: "Los datos del alumno no son válidos." }
+  }
+  if (input.lastName !== undefined && !isString(input.lastName)) {
     return { ok: false, error: "Los datos del alumno no son válidos." }
   }
   const groupId = Number(input.groupId)
@@ -571,11 +595,16 @@ export async function createStudentAction(
     const matricula = requestedNumber > 0
       ? input.matricula.trim()
       : `${input.matricula.trim().replace(/-\d+$/, "")}-${listNumber}`
+    const paternalSurname = input.paternalSurname.trim()
+    const maternalSurname = (input.maternalSurname ?? "").trim()
+    const lastName = (input.lastName ?? "").trim() || `${paternalSurname} ${maternalSurname}`.trim()
     const doc = await payload.create({
       collection: "students",
       data: {
         firstName: input.firstName.trim(),
-        lastName: input.lastName.trim(),
+        paternalSurname,
+        maternalSurname: maternalSurname || undefined,
+        lastName,
         matricula,
         group: groupId,
       },
@@ -604,6 +633,8 @@ export async function updateStudentAction(
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
   const data: Record<string, string | number> = {}
   if (isString(input.firstName)) data.firstName = input.firstName.trim()
+  if (isString(input.paternalSurname)) data.paternalSurname = input.paternalSurname.trim()
+  if (isString(input.maternalSurname)) data.maternalSurname = input.maternalSurname.trim()
   if (isString(input.lastName)) data.lastName = input.lastName.trim()
   if (isString(input.matricula)) data.matricula = input.matricula.trim()
   if (isString(input.groupId)) data.group = Number(input.groupId)
