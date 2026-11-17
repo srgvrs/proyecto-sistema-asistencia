@@ -547,21 +547,18 @@ export async function loadSchoolStateAction(): Promise<
       list.push(student)
       studentsByGroupName.set(student.group, list)
     }
-    const teacherNameById = new Map<string, string>(
-      (teachersResult.docs as TeacherUserDoc[]).map((doc) => [String(doc.id), doc.name]),
-    )
-    const groupTeacherNameById = new Map<string, string>()
+    const teacherNameByGroupId = new Map<string, string>()
     for (const group of groupsResult.docs as GroupDoc[]) {
       const teacherId = getRelationId(group.teacher)
       if (!teacherId) continue
-      const teacherName = teacherNameById.get(teacherId)
-      if (teacherName) groupTeacherNameById.set(String(group.id), teacherName)
+      const teacherDoc = (teachersResult.docs as TeacherUserDoc[]).find((doc) => String(doc.id) === teacherId)
+      if (teacherDoc) teacherNameByGroupId.set(String(group.id), teacherDoc.name)
     }
     const officialAttendanceLists = (officialListsResult.docs as OfficialListDoc[]).map((doc) =>
       mapOfficialListDoc(
         doc,
         studentsByGroupName.get(getRelationName(doc.group)),
-        groupTeacherNameById.get(getRelationId(doc.group)),
+        teacherNameByGroupId.get(getRelationId(doc.group)),
       ),
     )
 
