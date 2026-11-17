@@ -403,7 +403,11 @@ export async function officializeAttendanceAction(
     ]
 
     return { ok: true, attendanceRecords, officialAttendanceLists }
-  } catch {
+  } catch (error: any) {
+    console.error(
+      "OFFICIALIZE ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
     return { ok: false, error: "No fue posible oficializar la lista. Intenta nuevamente." }
   }
 }
