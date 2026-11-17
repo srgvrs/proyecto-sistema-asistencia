@@ -422,7 +422,9 @@ export interface ReportTemplate {
 export interface Student {
   id: number;
   firstName: string;
-  lastName: string;
+  paternalSurname: string;
+  maternalSurname?: string | null;
+  lastName?: string | null;
   matricula: string;
   group: number | Group;
   createdBy?:
@@ -957,6 +959,8 @@ export interface UsersSelect<T extends boolean = true> {
  */
 export interface StudentsSelect<T extends boolean = true> {
   firstName?: T;
+  paternalSurname?: T;
+  maternalSurname?: T;
   lastName?: T;
   matricula?: T;
   group?: T;
