@@ -1,6 +1,16 @@
 import type { Access, CollectionConfig } from "payload"
 import { isDirectivo, isStaff } from "../access"
 
+const readOfficialList: Access = ({ req }) => {
+  if (req.user?.collection === "admins") return true
+  if (req.user?.collection !== "users") return false
+  if (req.user.role === "Directivo" || req.user.role === "Vigilante de Acceso") return true
+  if (req.user.role === "Docente") {
+    return { "group.teacher": { equals: req.user.id } }
+  }
+  return false
+}
+
 const updateOfficialList: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
@@ -23,7 +33,7 @@ export const OfficialLists: CollectionConfig = {
     defaultColumns: ["title", "group", "file"],
   },
   access: {
-    read: isStaff,
+    read: readOfficialList,
     create: isStaff,
     update: updateOfficialList,
     delete: isDirectivo,

@@ -1,6 +1,6 @@
 import type { Access, CollectionConfig } from "payload"
 import { APIError } from "payload"
-import { isDirectivo, isStaff } from "../access"
+import { isDirectivo } from "../access"
 
 const readStudents: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
