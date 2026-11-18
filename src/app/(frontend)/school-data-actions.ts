@@ -659,6 +659,21 @@ export async function createStudentAction(
   }
   try {
     const payload = await getPayload({ config })
+    if (user.role === "Docente") {
+      const group = await payload.findByID({
+        collection: "groups",
+        id: groupId,
+        depth: 0,
+        overrideAccess: true,
+        user,
+      })
+      const teacherId = group?.teacher && typeof group.teacher === "object"
+        ? group.teacher.id
+        : group?.teacher
+      if (String(teacherId ?? "") !== String(user.id)) {
+        return { ok: false, error: "Solo puedes agregar alumnos a tus grupos asignados." }
+      }
+    }
     const groupStudents = await payload.find({
       collection: "students",
       where: { group: { equals: groupId } },

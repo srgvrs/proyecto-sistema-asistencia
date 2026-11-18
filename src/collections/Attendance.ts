@@ -4,7 +4,11 @@ import { isDirectivo, isDocente } from "../access"
 const readAttendance: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
-  return req.user.role === "Directivo" || req.user.role === "Docente"
+  if (req.user.role === "Directivo" || req.user.role === "Vigilante de Acceso") return true
+  if (req.user.role === "Docente") {
+    return { "student.group.teacher": { equals: req.user.id } }
+  }
+  return false
 }
 
 const createAttendance: Access = ({ req }) => {
