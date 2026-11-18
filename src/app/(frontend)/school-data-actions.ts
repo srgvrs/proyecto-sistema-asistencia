@@ -1272,7 +1272,10 @@ export async function deleteTeacherAction(
     return { ok: true }
   } catch (error: any) {
     console.error("ERROR REAL AL ELIMINAR DOCENTE:", error)
-    return { ok: false, error: error?.message || "No fue posible eliminar al docente." }
+    return {
+      ok: false,
+      error: error?.message || "No fue posible eliminar al docente.",
+    }
   }
 }
 

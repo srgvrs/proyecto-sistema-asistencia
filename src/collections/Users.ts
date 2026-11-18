@@ -1,4 +1,4 @@
-import type { Access, CollectionConfig } from "payload"
+import { APIError, type Access, type CollectionConfig } from "payload"
 
 const isDirectivo: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
@@ -66,5 +66,116 @@ export const Users: CollectionConfig = {
       },
     },
   ],
+  hooks: {
+    beforeDelete: [
+      async ({ id, req }) => {
+        const payload = req.payload
+        const currentUser = req.user
+
+        if (currentUser?.collection === "users" && String(currentUser.id) === String(id)) {
+          throw new APIError(
+            "No puedes eliminar tu propia cuenta mientras tienes la sesión activa.",
+            400,
+          )
+        }
+
+        const target = await payload.findByID({
+          collection: "users",
+          id,
+          depth: 0,
+          overrideAccess: true,
+          req,
+        })
+
+        if (target?.role === "Directivo") {
+          const directivos = await payload.find({
+            collection: "users",
+            where: { role: { equals: "Directivo" } },
+            limit: 2,
+            depth: 0,
+            overrideAccess: true,
+            req,
+          })
+          if (directivos.docs.length <= 1) {
+            throw new APIError(
+              "No puedes eliminar al último usuario con rol Directivo.",
+              400,
+            )
+          }
+        }
+
+        const [teacherAttendance, teacherJustifications, attendance, visitors] = await Promise.all([
+          payload.find({
+            collection: "teacher-attendance",
+            where: { teacher: { equals: id } },
+            limit: 1,
+            depth: 0,
+            overrideAccess: true,
+            req,
+          }),
+          payload.find({
+            collection: "teacher-justifications",
+            where: {
+              or: [
+                { teacher: { equals: id } },
+                { createdByUser: { equals: id } },
+              ],
+            },
+            limit: 1,
+            depth: 0,
+            overrideAccess: true,
+            req,
+          }),
+          payload.find({
+            collection: "attendance",
+            where: { registeredBy: { equals: id } },
+            limit: 1,
+            depth: 0,
+            overrideAccess: true,
+            req,
+          }),
+          payload.find({
+            collection: "visitors",
+            where: { registeredBy: { equals: id } },
+            limit: 1,
+            depth: 0,
+            overrideAccess: true,
+            req,
+          }),
+        ])
+
+        const hasReferences =
+          teacherAttendance.docs.length > 0 ||
+          teacherJustifications.docs.length > 0 ||
+          attendance.docs.length > 0 ||
+          visitors.docs.length > 0
+
+        if (hasReferences) {
+          throw new APIError(
+            "Este usuario tiene registros asociados. Usa baja temporal en lugar de eliminarlo.",
+            400,
+          )
+        }
+
+        const assignedGroups = await payload.find({
+          collection: "groups",
+          where: { teacher: { equals: id } },
+          limit: 200,
+          depth: 0,
+          overrideAccess: true,
+          req,
+        })
+        for (const group of assignedGroups.docs) {
+          await payload.update({
+            collection: "groups",
+            id: group.id,
+            data: { teacher: null },
+            overrideAccess: true,
+            req,
+          })
+        }
+      },
+    ],
+  },
   versions: false,
 }

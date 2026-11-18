@@ -1627,7 +1627,7 @@ function TeacherManagement({
     }
     requestConfirmation({
       title: "Eliminar docente definitivamente",
-      message: `Se eliminará a ${teacherName}, sus asignaciones de grupo y sus registros de asistencia docente. Esta acción no se puede deshacer.`,
+      message: `Se eliminará a ${teacherName} y se liberarán sus grupos asignados. Solo es posible si no tiene registros de asistencia, justificantes ni accesos asociados; en ese caso usa “Baja temporal”. Esta acción no se puede deshacer.`,
       confirmLabel: "Sí, eliminar definitivamente",
       tone: "danger",
     }, () => {
