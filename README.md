@@ -113,13 +113,6 @@ Funciona: login por rol, grupos, alumnos, pase de lista, asignación de docentes
 
 
 
-## Equipo
-
-| Nombre | Rol en el proyecto |
-|---|---|
-| _Sergio Olivares Sotelo_ | _FrontEnd_ |
-| _Nombre_ | _Rol_ |
-
 ## Licencia
 
 Este proyecto es de carácter académico y se distribuye bajo la [Licencia MIT](LICENSE).
