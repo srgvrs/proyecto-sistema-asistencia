@@ -396,7 +396,8 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
 .group-add-row select { margin: 0; }
 .catalog-notice { margin-top: -12px; }
 .catalog-forms { display: grid; grid-template-columns: minmax(260px, .55fr) minmax(520px, 1.45fr); gap: 20px; align-items: start; }
-.catalog-student-fields { grid-template-columns: repeat(3, minmax(105px, 1fr)) .65fr .55fr auto; align-items: end; }
+/* Catalog  ZOOM PARA LAS LETRAS DEL FORMULARIO*/
+.catalog-student-fields { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); align-items: end; }
 .catalog-student-fields > .primary-button { width: auto; min-height: 38px; }
 .catalog-list { margin-top: 20px; }
 .catalog-list-head { gap: 20px; }
