@@ -20,6 +20,7 @@ import {
   deleteVisitorAction,
   loadOfficialAttendanceStatusAction,
   loadSchoolStateAction,
+  previewSchoolYearCloseAction,
   officializeAttendanceAction,
   correctOfficialAttendanceAction,
   updateStudentAction,
@@ -33,7 +34,7 @@ import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateDat
 import { compareStudentsAlphabetically, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
 
-type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes";
+type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
 type NavigationItem = { view: View; icon: string; label: string; description: string; keywords: string };
 
 const normalizeSearch = (value: string) =>
@@ -324,6 +325,7 @@ function App({
       { view: "catalogo" as const, icon: "layers", label: "Grupos y alumnos", description: "Crear grupos y gestionar alumnado", keywords: "catalogo estudiantes grados altas" },
       { view: "personal" as const, icon: "badge", label: "Gestión de docentes", description: "Registrar y administrar personal", keywords: "maestros altas bajas justificantes" },
       { view: "usuarios" as const, icon: "lock", label: "Usuarios y accesos", description: "Crear cuentas, roles y contraseñas", keywords: "usuario acceso cuenta seguridad roles password" },
+      { view: "cierre-ciclo" as const, icon: "calendar", label: "Cerrar ciclo escolar", description: "Vista previa de promoción y egreso", keywords: "cierre ciclo escolar promocion egreso fin de curso" },
     ] : []),
     ...(session.role !== "Vigilante de Acceso" ? [{ view: "reportes" as const, icon: "chart", label: "Reportes", description: "Consultar y exportar asistencia", keywords: "reporte informe estadisticas csv pdf" }] : []),
   ];
@@ -372,7 +374,7 @@ function App({
           </button>
           <div className="topbar-title">
             <span>Sistema de asistencia</span>
-            <strong>{view === "inicio" ? "Resumen" : view === "visitantes" ? "Personas externas" : view === "lista" ? "Pase de lista" : view === "listas-oficiales" ? "Listas oficiales" : view === "alumnos" ? "Agregar alumno a la lista" : view === "grupos" ? "Agregar grupo a docente" : view === "catalogo" ? "Grupos y alumnos" : view === "personal" ? "Gestión de docentes" : view === "usuarios" ? "Usuarios y accesos" : view === "docentes" ? session.role === "Directivo" ? "Asistencia Docentes" : "Registrar entrada docente" : "Reportes"}</strong>
+            <strong>{view === "inicio" ? "Resumen" : view === "visitantes" ? "Personas externas" : view === "lista" ? "Pase de lista" : view === "listas-oficiales" ? "Listas oficiales" : view === "alumnos" ? "Agregar alumno a la lista" : view === "grupos" ? "Agregar grupo a docente" : view === "catalogo" ? "Grupos y alumnos" : view === "personal" ? "Gestión de docentes" : view === "usuarios" ? "Usuarios y accesos" : view === "cierre-ciclo" ? "Cerrar ciclo escolar" : view === "docentes" ? session.role === "Directivo" ? "Asistencia Docentes" : "Registrar entrada docente" : "Reportes"}</strong>
           </div>
           <div className="navigation-search" onFocus={() => setSearchOpen(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchOpen(false); }}>
             <Icon name="search" size={18} />
@@ -507,6 +509,9 @@ function App({
           )}
           {view === "usuarios" && session.role === "Directivo" && (
             <UserManagement users={users} setUsers={setUsers} />
+          )}
+          {view === "cierre-ciclo" && session.role === "Directivo" && (
+            <SchoolYearClose />
           )}
           {view === "reportes" && session.role !== "Vigilante de Acceso" && <Reports records={records} students={students} groups={groups.map((group) => group.name)} assignments={teacherGroups} allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined} initialTemplates={initialTemplates} />}
         </section>
@@ -3123,6 +3128,128 @@ function Reports({
           {displayedRows.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos coincidentes</strong><p>Prueba con otro nombre o limpia la búsqueda.</p></div>}
         </div>
       </section> : <section className="panel empty-state"><Icon name="users" /><strong>No hay grupos disponibles</strong><p>Registra o asigna un grupo antes de consultar reportes.</p></section>}
+    </>
+  );
+}
+
+type SchoolYearCloseStudentPlan = {
+  id: string;
+  name: string;
+  currentGroup: string;
+  destination: string;
+  currentMatricula: string;
+  nextMatricula: string;
+  matriculaConflict: boolean;
+};
+
+type SchoolYearCloseGroupPlan = {
+  groupId: string;
+  groupName: string;
+  grade: number;
+  letter: string;
+  destinationGroupName: string;
+  destinationGroupId: string | null;
+  destinationWillBeCreated: boolean;
+  students: SchoolYearCloseStudentPlan[];
+};
+
+type SchoolYearClosePreview = {
+  groups: SchoolYearCloseGroupPlan[];
+  warnings: string[];
+  totals: {
+    promoted: number;
+    graduated: number;
+    excluded: number;
+    groupsToCreate: number;
+  };
+};
+
+function SchoolYearClose() {
+  const [isPending, startTransition] = useTransition();
+  const [preview, setPreview] = useState<SchoolYearClosePreview | null>(null);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [error, setError] = useState("");
+
+  const loadPreview = useCallback((excludedIds: Set<string>) => {
+    setError("");
+    startTransition(async () => {
+      const result = await previewSchoolYearCloseAction({ excludedStudentIds: [...excludedIds] });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setPreview(result.preview);
+    });
+  }, []);
+
+  useEffect(() => {
+    loadPreview(new Set());
+  }, [loadPreview]);
+
+  const toggleExcluded = (studentId: string) => {
+    setExcluded((current) => {
+      const next = new Set(current);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      loadPreview(next);
+      return next;
+    });
+  };
+
+  return (
+    <>
+      <div className="page-intro">
+        <div><p className="eyebrow">FIN DE CICLO ESCOLAR</p><h1>Cerrar ciclo escolar</h1><p>Revisa la promoción de grupos y el egreso de sexto grado antes de ejecutar el cierre.</p></div>
+        <div className="student-counter"><span>{preview?.totals.promoted ?? 0}</span><div><small>ALUMNOS QUE SUBEN</small><strong>{preview?.totals.graduated ?? 0} egresan · {preview?.totals.excluded ?? 0} excluidos</strong></div></div>
+      </div>
+      {error && <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>No se pudo generar la vista previa</strong><p>{error}</p></div></div>}
+      {preview && preview.warnings.length > 0 && (
+        <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>Avisos</strong>{preview.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div></div>
+      )}
+      {preview && (
+        <>
+          <div className="attendance-report-metrics">
+            <div className="attendance-report-metric attended"><span><Icon name="check" /></span><div><small>SUBEN DE GRADO</small><strong>{preview.totals.promoted}</strong><p>Alumnos activos</p></div></div>
+            <div className="attendance-report-metric present"><span><Icon name="badge" /></span><div><small>EGRESAN</small><strong>{preview.totals.graduated}</strong><p>Alumnos de sexto</p></div></div>
+            <div className="attendance-report-metric late"><span><Icon name="clock" /></span><div><small>EXCLUIDOS</small><strong>{preview.totals.excluded}</strong><p>No se moverán</p></div></div>
+            <div className="attendance-report-metric absent"><span><Icon name="plus" /></span><div><small>GRUPOS POR CREAR</small><strong>{preview.totals.groupsToCreate}</strong><p>Destinos inexistentes</p></div></div>
+          </div>
+          {preview.groups.map((group) => (
+            <section className="panel management-list" key={group.groupId}>
+              <div className="panel-head">
+                <div>
+                  <p className="eyebrow">GRUPO {group.groupName}</p>
+                  <h2>{group.destinationGroupName}{group.destinationWillBeCreated ? " · se creará" : ""}</h2>
+                </div>
+                <span className="group-badge">{group.students.length} alumnos</span>
+              </div>
+              <div className="student-management-table">
+                <div className="student-management-head"><span>Excluir</span><span>Alumno</span><span>Destino</span><span>Matrícula</span></div>
+                {group.students.map((student) => (
+                  <div className="student-management-row" key={student.id}>
+                    <label className="egresados-toggle">
+                      <input type="checkbox" checked={excluded.has(student.id)} onChange={() => toggleExcluded(student.id)} disabled={isPending} />
+                    </label>
+                    <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
+                    <span className="group-badge">{student.destination}</span>
+                    <span>
+                      <strong>{student.nextMatricula}</strong>
+                      {student.matriculaConflict && <small> · conflicto, se propone el siguiente consecutivo libre</small>}
+                    </span>
+                  </div>
+                ))}
+                {group.students.length === 0 && <div className="empty-state"><Icon name="users" /><strong>Sin alumnos activos</strong><p>Este grupo no tiene alumnos para mover.</p></div>}
+              </div>
+            </section>
+          ))}
+        </>
+      )}
+      <div className="roll-footer">
+        <p><Icon name="alert" size={18} /> Esta es solo una vista previa. Aún no se modifica ningún dato.</p>
+        <div>
+          <button className="primary-button" type="button" disabled title="Disponible en la siguiente etapa">Siguiente etapa</button>
+        </div>
+      </div>
     </>
   );
 }

@@ -2174,6 +2174,233 @@ export async function deleteTeacherAction(
   }
 }
 
+type SchoolYearCloseStudentPlan = {
+  id: string
+  name: string
+  currentGroup: string
+  destination: string
+  currentMatricula: string
+  nextMatricula: string
+  matriculaConflict: boolean
+}
+
+type SchoolYearCloseGroupPlan = {
+  groupId: string
+  groupName: string
+  grade: number
+  letter: string
+  destinationGroupName: string
+  destinationGroupId: string | null
+  destinationWillBeCreated: boolean
+  students: SchoolYearCloseStudentPlan[]
+}
+
+type SchoolYearClosePreview = {
+  groups: SchoolYearCloseGroupPlan[]
+  warnings: string[]
+  totals: {
+    promoted: number
+    graduated: number
+    excluded: number
+    groupsToCreate: number
+  }
+}
+
+export async function previewSchoolYearCloseAction(
+  input: { excludedStudentIds?: string[] },
+): Promise<{ ok: true; preview: SchoolYearClosePreview } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede cerrar el ciclo escolar." }
+  }
+  const rawExcluded = Array.isArray(input?.excludedStudentIds) ? input.excludedStudentIds : []
+  if (rawExcluded.length > 5000 || !rawExcluded.every((id) => isString(id))) {
+    return { ok: false, error: "La lista de alumnos excluidos no es válida." }
+  }
+  const excludedIds = new Set<string>()
+  for (const id of rawExcluded) {
+    const numeric = Number(id)
+    if (!Number.isInteger(numeric) || numeric <= 0) {
+      return { ok: false, error: "La lista de alumnos excluidos no es válida." }
+    }
+    excludedIds.add(String(numeric))
+  }
+
+  try {
+    const payload = await getPayload({ config })
+
+    const groupsResult = await payload.find({
+      collection: "groups",
+      limit: 500,
+      sort: "name",
+      depth: 0,
+      overrideAccess: false,
+      user,
+    })
+    const studentsResult = await payload.find({
+      collection: "students",
+      limit: 5000,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    })
+
+    const groupDocs = groupsResult.docs as GroupDoc[]
+    const studentDocs = studentsResult.docs as StudentDoc[]
+
+    const groupsByName = new Map<string, GroupDoc>()
+    for (const group of groupDocs) groupsByName.set(group.name, group)
+
+    const matriculaOwners = new Map<string, string>()
+    for (const doc of studentDocs) {
+      if (doc.matricula) matriculaOwners.set(doc.matricula, String(doc.id))
+    }
+
+    const warnings: string[] = []
+    const groups: SchoolYearCloseGroupPlan[] = []
+    let promoted = 0
+    let graduated = 0
+    let excluded = 0
+    const groupsToCreateNames = new Set<string>()
+
+    const studentsByGroupId = new Map<string, StudentDoc[]>()
+    for (const doc of studentDocs) {
+      const groupId = getRelationId(doc.group)
+      if (!groupId) continue
+      const list = studentsByGroupId.get(groupId) || []
+      list.push(doc)
+      studentsByGroupId.set(groupId, list)
+    }
+
+    for (const group of groupDocs) {
+      const match = /^(\d)°\s*([A-Za-z])$/.exec(group.name.trim())
+      if (!match) {
+        warnings.push(`El grupo "${group.name}" no tiene un nombre con el formato esperado (por ejemplo "1° A"). Se omitirá del cierre de ciclo.`)
+        continue
+      }
+      const grade = Number(match[1])
+      const letter = match[2].toUpperCase()
+      if (!Number.isInteger(grade) || grade < 1 || grade > 6) {
+        warnings.push(`El grupo "${group.name}" tiene un grado fuera de rango. Se omitirá del cierre de ciclo.`)
+        continue
+      }
+
+      const isGraduating = grade === 6
+      const destinationGroupName = isGraduating ? "Egresado" : `${grade + 1}° ${letter}`
+      const destinationGroup = isGraduating ? null : groupsByName.get(destinationGroupName) ?? null
+      const destinationWillBeCreated = !isGraduating && !destinationGroup
+      if (destinationWillBeCreated) groupsToCreateNames.add(destinationGroupName)
+
+      const groupStudents = (studentsByGroupId.get(String(group.id)) || [])
+        .filter((doc) => (doc.status ?? "Activo") === "Activo")
+        .slice()
+        .sort((a, b) => {
+          const partsA = resolveStudentNameParts(a)
+          const partsB = resolveStudentNameParts(b)
+          const options = { sensitivity: "base" as const }
+          return (
+            partsA.paternalSurname.localeCompare(partsB.paternalSurname, "es-MX", options) ||
+            partsA.maternalSurname.localeCompare(partsB.maternalSurname, "es-MX", options) ||
+            partsA.givenNames.localeCompare(partsB.givenNames, "es-MX", options)
+          )
+        })
+
+      const studentPlans: SchoolYearCloseStudentPlan[] = []
+      for (const doc of groupStudents) {
+        const studentId = String(doc.id)
+        const parts = resolveStudentNameParts(doc)
+        const displayName = buildStudentName(parts.givenNames, parts.paternalSurname, parts.maternalSurname)
+        const currentMatricula = doc.matricula ?? ""
+        const consecutive = parseListNumber(currentMatricula)
+
+        if (excludedIds.has(studentId)) {
+          excluded += 1
+          studentPlans.push({
+            id: studentId,
+            name: displayName,
+            currentGroup: group.name,
+            destination: group.name,
+            currentMatricula,
+            nextMatricula: currentMatricula,
+            matriculaConflict: false,
+          })
+          continue
+        }
+
+        if (isGraduating) {
+          graduated += 1
+          studentPlans.push({
+            id: studentId,
+            name: displayName,
+            currentGroup: group.name,
+            destination: "Egresado",
+            currentMatricula,
+            nextMatricula: currentMatricula,
+            matriculaConflict: false,
+          })
+          continue
+        }
+
+        promoted += 1
+        const prefix = destinationGroupName.replace(/\s+/g, "")
+        let nextConsecutive = consecutive > 0 ? consecutive : 1
+        let nextMatricula = `${prefix}-${nextConsecutive}`
+        let matriculaConflict = false
+        const owner = matriculaOwners.get(nextMatricula)
+        if (owner && owner !== studentId) {
+          matriculaConflict = true
+          let candidate = nextConsecutive + 1
+          while (matriculaOwners.has(`${prefix}-${candidate}`)) candidate += 1
+          nextConsecutive = candidate
+          nextMatricula = `${prefix}-${nextConsecutive}`
+        }
+        matriculaOwners.set(nextMatricula, studentId)
+
+        studentPlans.push({
+          id: studentId,
+          name: displayName,
+          currentGroup: group.name,
+          destination: destinationGroupName,
+          currentMatricula,
+          nextMatricula,
+          matriculaConflict,
+        })
+      }
+
+      groups.push({
+        groupId: String(group.id),
+        groupName: group.name,
+        grade,
+        letter,
+        destinationGroupName,
+        destinationGroupId: destinationGroup ? String(destinationGroup.id) : null,
+        destinationWillBeCreated,
+        students: studentPlans,
+      })
+    }
+
+    return {
+      ok: true,
+      preview: {
+        groups,
+        warnings,
+        totals: {
+          promoted,
+          graduated,
+          excluded,
+          groupsToCreate: groupsToCreateNames.size,
+        },
+      },
+    }
+  } catch (error: any) {
+    console.error(
+      "PREVIEW SCHOOL YEAR CLOSE ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return { ok: false, error: "No fue posible generar la vista previa del cierre de ciclo." }
+  }
+}
+
 export async function updateTeacherEmploymentStatusAction(
   teacherId: string,
   status: "Activo" | "Baja temporal",
