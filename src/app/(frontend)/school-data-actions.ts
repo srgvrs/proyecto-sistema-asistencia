@@ -2392,9 +2392,6 @@ export async function previewSchoolYearCloseAction(
       const studentsToMove = studentPlans.filter((plan) => !excludedIds.has(plan.id) && plan.destination !== plan.currentGroup).length
       if (destinationWillBeCreated && studentsToMove > 0) groupsToCreateNames.add(destinationGroupName)
 
-      const studentsToMove = studentPlans.filter((plan) => !excludedIds.has(plan.id) && plan.destination !== plan.currentGroup).length
-      if (destinationWillBeCreated && studentsToMove > 0) groupsToCreateNames.add(destinationGroupName)
-
       groups.push({
         groupId: String(group.id),
         groupName: group.name,
@@ -2689,8 +2686,6 @@ export async function closeSchoolYearAction(
         }
         continue
       }
-
-      if (plannedGroup.students.length === 0) continue
 
       if (plannedGroup.students.length === 0) continue
 
