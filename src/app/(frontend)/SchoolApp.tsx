@@ -3235,8 +3235,12 @@ function SchoolYearClose({
     });
   }, []);
 
+  const initialLoadRef = useRef(false);
   useEffect(() => {
-    loadPreview(new Set());
+    if (initialLoadRef.current) return;
+    initialLoadRef.current = true;
+    const timer = setTimeout(() => loadPreview(new Set()), 0);
+    return () => clearTimeout(timer);
   }, [loadPreview]);
 
   const toggleExcluded = (studentId: string) => {
