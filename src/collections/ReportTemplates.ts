@@ -12,7 +12,7 @@ export const ReportTemplates: CollectionConfig = {
   },
   access: {
     create: ({ req }) => Boolean(req.user),
-    read: () => true,
+    read: ({ req }) => Boolean(req.user),
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
   },
