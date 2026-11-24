@@ -57,6 +57,14 @@ export const Groups: CollectionConfig = {
         role: { equals: "Docente" },
       },
     },
+    {
+      name: "lastMatriculaNumber",
+      label: "Último consecutivo de matrícula",
+      type: "number",
+      required: false,
+      defaultValue: 0,
+      admin: { hidden: true },
+    },
   ],
   versions: false,
 }
