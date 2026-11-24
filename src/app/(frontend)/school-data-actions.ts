@@ -1102,6 +1102,9 @@ export async function updateAttendanceAction(
     return { ok: false, error: "No tienes permiso para actualizar asistencia." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
+  if (user.role === "Docente" && "registeredBy" in (input as Record<string, unknown>)) {
+    return { ok: false, error: "No tienes permiso sobre este alumno." }
+  }
   const data: Record<string, unknown> = {}
   if (isString(input.studentId)) data.student = Number(input.studentId)
   if (isISODate(input.date)) data.date = `${input.date}T00:00:00.000Z`
