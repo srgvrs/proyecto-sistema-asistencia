@@ -54,9 +54,11 @@ export default function RootLayout({
   const customScripts = makeSiteSettings.customScripts
 
   return (
-    <html lang={language}>
+    <html lang={language} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: PRE_HYDRATION_SCRIPT }} />
+        <Script id="vs-pre-hydration" strategy="beforeInteractive">
+          {PRE_HYDRATION_SCRIPT}
+        </Script>
         {renderHeadCustomCode(customScripts?.headStart, "head-start")}
         {renderHeadCustomCode(customScripts?.headEnd, "head-end")}
       </head>
