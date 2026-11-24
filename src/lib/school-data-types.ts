@@ -81,6 +81,11 @@ export type SchoolStateData = {
 
 export type SchoolStateSection = keyof SchoolStateData
 
+export const SCHOOL_TIME_ZONE = "America/Mexico_City"
+
+export const todayISO = (): string =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: SCHOOL_TIME_ZONE }).format(new Date())
+
 export const toISODateTimeFromHHMM = (date: string, time: string): string => {
   const [hours, minutes] = time.split(":").map(Number)
   const base = new Date(`${date}T00:00:00`)

@@ -25,6 +25,7 @@ import {
   updateVisitorAction,
 } from "./school-data-actions";
 import type { AppUserSummary, Role } from "@/lib/app-user-types";
+import { todayISO } from "@/lib/school-data-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 import { compareStudentsAlphabetically, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 
@@ -85,7 +86,6 @@ export type ReportTemplate = {
 const schoolGrades = ["1", "2", "3", "4", "5", "6"];
 const groupLetters = ["A", "B", "C", "D", "E", "F"];
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
 const getSchoolStateWithDefaults = (state?: Partial<SchoolStateData> | null): SchoolStateData => ({
   students: state?.students ?? [],
   groups: state?.groups ?? [],
@@ -97,8 +97,8 @@ const getSchoolStateWithDefaults = (state?: Partial<SchoolStateData> | null): Sc
   teachers: state?.teachers ?? [],
 });
 const formatDate = (date: string) =>
-  new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" }).format(
-    new Date(`${date}T12:00:00`),
+  new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(
+    new Date(`${date}T12:00:00Z`),
   );
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {

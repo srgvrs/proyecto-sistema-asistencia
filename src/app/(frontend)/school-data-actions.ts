@@ -38,7 +38,15 @@ const toHHMM = (value: string | null | undefined): string => {
   if (!value) return ""
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return ""
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Mexico_City",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date)
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "00"
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "00"
+  return `${hour}:${minute}`
 }
 
 
