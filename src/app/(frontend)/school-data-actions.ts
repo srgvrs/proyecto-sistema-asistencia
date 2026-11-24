@@ -831,7 +831,7 @@ export async function officializeAttendanceAction(
       overrideAccess: false,
       user,
     })
-    const groupStudents = studentsResult.docs as StudentDoc[]
+    const groupStudents = (studentsResult.docs as StudentDoc[]).filter((student) => student.status !== "Egresado")
     if (!groupStudents.length) return { ok: false, error: "El grupo no tiene alumnos registrados." }
 
     const submittedStatuses = new Map(input.attendance.map((item) => [item.studentId, item.status]))

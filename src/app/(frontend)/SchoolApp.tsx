@@ -58,6 +58,8 @@ const getStudentNameParts = (student: Student) => {
 
 const compareStudentsByPaternalSurname = compareStudentsAlphabetically;
 
+const isActiveStudent = (student: Student) => student.status !== "Egresado";
+
 const formatStudentName = (paternalSurname: string, maternalSurname: string, givenNames: string) =>
   `${paternalSurname.trim()} ${maternalSurname.trim()} ${givenNames.trim()}`;
 
@@ -569,7 +571,8 @@ function Dashboard({ userName, role, records, students, visitors, assignedGroups
   if (role === "Vigilante de Acceso") {
     return <VisitorDashboard userName={userName} visitors={visitors} onNavigate={onNavigate} />;
   }
-  const visibleStudents = role === "Docente" ? students.filter((student) => assignedGroups.includes(student.group)) : students;
+  const activeStudents = students.filter(isActiveStudent);
+  const visibleStudents = role === "Docente" ? activeStudents.filter((student) => assignedGroups.includes(student.group)) : activeStudents;
   const visibleStudentIds = new Set(visibleStudents.map((student) => student.id));
   const visibleRecords = records.filter((record) => visibleStudentIds.has(record.studentId));
   const currentDate = todayISO();
@@ -1003,7 +1006,7 @@ function StudentManagement({
     }
   }, [availableGroups, group]);
 
-  const numberedGroupStudents = sortAndNumberGroupStudents(students, group);
+  const numberedGroupStudents = sortAndNumberGroupStudents(students.filter(isActiveStudent), group);
   const visibleStudents = numberedGroupStudents.filter((student) =>
     `${student.name} ${student.group} ${student.listNumber}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -1154,6 +1157,7 @@ function GroupStudentManagement({
   const [group, setGroup] = useState(groups[0]?.id || "");
   const [groupFilter, setGroupFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [showEgresados, setShowEgresados] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [editGivenNames, setEditGivenNames] = useState("");
@@ -1163,6 +1167,7 @@ function GroupStudentManagement({
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const numberedStudents = sortAndNumberStudents(students);
   const visibleStudents = numberedStudents.filter((student) =>
+    (showEgresados || isActiveStudent(student)) &&
     (!groupFilter || student.group === groupFilter) &&
     `${student.name} ${student.listNumber}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -1440,20 +1445,28 @@ function GroupStudentManagement({
           <div className="catalog-filters">
             <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="">Todos los grupos</option>{groupNames.map((option) => <option key={option}>{option}</option>)}</select>
             <div className="visitor-search"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar alumno…" /></div>
+            <label className="egresados-toggle"><input type="checkbox" checked={showEgresados} onChange={(event) => setShowEgresados(event.target.checked)} /> Mostrar egresados</label>
           </div>
         </div>
         <div className="student-management-table">
           <div className="student-management-head"><span>N.º</span><span>Alumno</span><span>Grupo</span><span>Docente asignado</span><span>Acciones</span></div>
-          {visibleStudents.map((student) => <div className="student-management-row" key={student.id}>
-            <span className="list-number-chip">{student.listNumber}</span>
-            <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
-            <span className="group-badge">{student.group}</span>
-            <span className="teacher-badge">{teacherNameForGroup(groups.find((group) => group.name === student.group)?.id ?? "")}</span>
-            <div className="student-row-actions">
-              <button type="button" className="secondary-button" onClick={() => openEditStudent(student)} disabled={isPending} aria-label={`Editar a ${student.name}`}><Icon name="plus" size={16} /> Editar</button>
-              {canDelete && <button type="button" className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
-            </div>
-          </div>)}
+          {visibleStudents.map((student) => {
+            const isEgresado = !isActiveStudent(student);
+            return <div className="student-management-row" key={student.id}>
+              <span className="list-number-chip">{student.listNumber}</span>
+              <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
+              <span className="group-badge">{student.group}</span>
+              <span className="teacher-badge">{teacherNameForGroup(groups.find((group) => group.name === student.group)?.id ?? "")}</span>
+              <div className="student-row-actions">
+                {isEgresado
+                  ? <span className="group-badge">Egresado</span>
+                  : <>
+                      <button type="button" className="secondary-button" onClick={() => openEditStudent(student)} disabled={isPending} aria-label={`Editar a ${student.name}`}><Icon name="plus" size={16} /> Editar</button>
+                      {canDelete && <button type="button" className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
+                    </>}
+              </div>
+            </div>;
+          })}
           {visibleStudents.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos</strong><p>No hay alumnos que coincidan con los filtros seleccionados.</p></div>}
         </div>
       </section>
@@ -2452,7 +2465,7 @@ function RollCall({
     }
   }, [availableGroups, group]);
   const groupStudents = availableGroups.includes(group)
-    ? sortAndNumberGroupStudents(students, group)
+    ? sortAndNumberGroupStudents(students.filter(isActiveStudent), group)
     : [];
   const officialList = availableGroups.includes(group)
     ? officialLists.find((list) => list.group === group && list.month === date.slice(0, 7))
@@ -2811,6 +2824,7 @@ function LegacyReports({ records, students, allowedGroups, initialTemplates }: {
     };
   }, []);
   const visibleStudents = (allowedGroups ? students.filter((student) => allowedGroups.includes(student.group)) : students)
+    .filter(isActiveStudent)
     .slice()
     .sort(compareStudentsByPaternalSurname);
   const reportRows = useMemo(() => visibleStudents.map((student) => {
@@ -2985,7 +2999,7 @@ function Reports({
     if (!selectedGroup || !availableGroups.includes(selectedGroup)) setSelectedGroup(availableGroups[0] || "");
   }, [availableGroups, selectedGroup]);
 
-  const groupStudents = sortAndNumberGroupStudents(students, selectedGroup);
+  const groupStudents = sortAndNumberGroupStudents(students.filter(isActiveStudent), selectedGroup);
 
   const rows = useMemo(() => groupStudents.map((student) => {
     const statusByDate = new Map<string, Status>();
