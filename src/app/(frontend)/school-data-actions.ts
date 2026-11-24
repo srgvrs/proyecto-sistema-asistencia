@@ -759,7 +759,7 @@ export async function deleteStudentAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await appAuth.currentUser()
-  if (!user || user.role !== "Directivo") {
+  if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para eliminar alumnos." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
@@ -769,6 +769,27 @@ export async function deleteStudentAction(
   }
   try {
     const payload = await getPayload({ config })
+
+    if (user.role === "Docente") {
+      const student = await payload.findByID({
+        collection: "students",
+        id: numericId,
+        depth: 1,
+        overrideAccess: true,
+        user,
+      })
+      const group = (student as StudentDoc | null)?.group
+      const teacherId = group && typeof group === "object"
+        ? (group as { teacher?: number | { id: number } | null }).teacher
+        : undefined
+      const resolvedTeacherId = teacherId && typeof teacherId === "object"
+        ? teacherId.id
+        : teacherId
+      if (String(resolvedTeacherId ?? "") !== String(user.id)) {
+        return { ok: false, error: "Solo puedes eliminar alumnos de tus grupos asignados." }
+      }
+    }
+
     await payload.delete({ collection: "students", id: numericId, overrideAccess: false, user })
     return { ok: true }
   } catch (error: any) {

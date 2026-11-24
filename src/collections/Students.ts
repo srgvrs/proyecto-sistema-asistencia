@@ -18,6 +18,16 @@ const createStudents: Access = ({ req }) => {
   return req.user.role === "Directivo" || req.user.role === "Docente"
 }
 
+const deleteStudents: Access = ({ req }) => {
+  if (req.user?.collection === "admins") return true
+  if (req.user?.collection !== "users") return false
+  if (req.user.role === "Directivo") return true
+  if (req.user.role === "Docente") {
+    return { "group.teacher": { equals: req.user.id } }
+  }
+  return false
+}
+
 export const Students: CollectionConfig = {
   slug: "students",
   labels: {
@@ -33,7 +43,7 @@ export const Students: CollectionConfig = {
     read: readStudents,
     create: createStudents,
     update: isDirectivo,
-    delete: isDirectivo,
+    delete: deleteStudents,
   },
   hooks: {
     beforeValidate: [
