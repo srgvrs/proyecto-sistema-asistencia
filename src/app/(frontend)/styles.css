@@ -187,13 +187,13 @@ h1, h2, h3, .brand strong { font-family: ui-sans-serif, system-ui, -apple-system
 .user-chip strong, .user-chip small { display: block; }
 .user-chip strong { color: var(--color-heading); font-size: 12px; }
 .user-chip small { color: var(--color-text-muted); font-size: 10px; margin-top: 2px; }
-.confirmation-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: var(--color-dialog-overlay); backdrop-filter: blur(5px); animation: confirmation-fade .16s ease-out; }
+.confirmation-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: var(--color-dialog-overlay); backdrop-filter: blur(5px); animation: confirmation-fade .16s ease-out; }
 .confirmation-dialog { width: min(440px, 100%); display: grid; grid-template-columns: 48px 1fr; gap: 15px; color: var(--color-dialog-text); background: var(--color-dialog-bg); border: 1px solid var(--color-border); border-radius: 16px; padding: 22px; box-shadow: 0 24px 70px rgba(3,30,22,.3); animation: confirmation-rise .18s ease-out; }
 .confirmation-icon { width: 48px; height: 48px; display: grid; place-items: center; color: var(--color-notice-success-text); background: var(--color-notice-success-bg); border-radius: 12px; }
 .confirmation-icon.danger { color: var(--color-notice-error-text); background: var(--color-notice-error-bg); }
 .confirmation-copy .eyebrow { margin-bottom: 5px; }
 .confirmation-copy h2 { color: var(--color-dialog-heading); font-size: 17px; }
-.confirmation-copy > p:last-child { color: var(--color-dialog-muted); font-size: 11px; line-height: 1.55; margin-top: 8px; }
+.confirmation-copy > p:last-child { color: var(--color-dialog-muted); font-size: 11px; line-height: 1.55; margin-top: 8px; white-space: pre-line; }
 .confirmation-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 9px; padding-top: 4px; }
 .danger-confirm-button { color: var(--color-btn-primary-text); background: var(--color-btn-danger-text); border: 0; border-radius: 8px; padding: 11px 16px; font-size: 11px; font-weight: 700; }
 .danger-confirm-button:hover { background: var(--color-btn-danger-border); }
