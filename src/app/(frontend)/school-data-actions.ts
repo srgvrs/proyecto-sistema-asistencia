@@ -790,6 +790,13 @@ export async function deleteStudentAction(
       }
     }
 
+    await payload.delete({
+      collection: "attendance",
+      where: { student: { equals: numericId } },
+      overrideAccess: false,
+      user,
+    })
+
     await payload.delete({ collection: "students", id: numericId, overrideAccess: false, user })
     return { ok: true }
   } catch (error: any) {
