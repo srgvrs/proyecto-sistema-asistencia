@@ -19,6 +19,7 @@ import {
   deleteVisitorAction,
   loadSchoolStateAction,
   officializeAttendanceAction,
+  updateStudentAction,
   updateTeacherAttendanceAction,
   updateTeacherEmploymentStatusAction,
   updateVisitorAction,
@@ -1194,6 +1195,11 @@ function GroupStudentManagement({
   const [groupFilter, setGroupFilter] = useState("");
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editGivenNames, setEditGivenNames] = useState("");
+  const [editPaternalSurname, setEditPaternalSurname] = useState("");
+  const [editMaternalSurname, setEditMaternalSurname] = useState("");
+  const [editGroupId, setEditGroupId] = useState("");
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const numberedStudents = sortAndNumberStudents(students);
   const visibleStudents = numberedStudents.filter((student) =>
@@ -1300,6 +1306,103 @@ function GroupStudentManagement({
     });
   };
 
+  const openEditStudent = (student: Student) => {
+    const parts = getStudentNameParts(student);
+    setEditingStudent(student);
+    setEditGivenNames(parts.givenNames);
+    setEditPaternalSurname(parts.paternalSurname);
+    setEditMaternalSurname(parts.maternalSurname);
+    setEditGroupId(groups.find((group) => group.name === student.group)?.id || "");
+    setNotice(null);
+  };
+
+  const closeEditStudent = () => {
+    setEditingStudent(null);
+    setEditGivenNames("");
+    setEditPaternalSurname("");
+    setEditMaternalSurname("");
+    setEditGroupId("");
+  };
+
+  const saveEditStudent = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingStudent) return;
+    const student = editingStudent;
+    const nextGivenNames = editGivenNames.trim();
+    const nextPaternalSurname = editPaternalSurname.trim();
+    const nextMaternalSurname = editMaternalSurname.trim();
+    if (!nextGivenNames || !nextPaternalSurname) {
+      setNotice({ type: "error", text: "El nombre y el apellido paterno son obligatorios." });
+      return;
+    }
+    const nextGroup = groups.find((group) => group.id === editGroupId);
+    if (!nextGroup) {
+      setNotice({ type: "error", text: "Selecciona un grupo válido." });
+      return;
+    }
+    const previousParts = getStudentNameParts(student);
+    const previousName = formatStudentName(previousParts.paternalSurname, previousParts.maternalSurname, previousParts.givenNames);
+    const nextName = formatStudentName(nextPaternalSurname, nextMaternalSurname, nextGivenNames);
+    const groupChanged = nextGroup.name !== student.group;
+    const listNumber = student.listNumber;
+    const previousMatricula = `${student.group.replace(/\s+/g, "")}-${listNumber}`;
+    const nextMatricula = `${nextGroup.name.replace(/\s+/g, "")}-${listNumber}`;
+    const nameChanged = nextName !== previousName;
+    if (!nameChanged && !groupChanged) {
+      setNotice({ type: "error", text: "No hay cambios para guardar." });
+      return;
+    }
+
+    const applyChanges = () => {
+      setNotice(null);
+      startTransition(async () => {
+        const result = await updateStudentAction(student.id, {
+          firstName: nextGivenNames,
+          paternalSurname: nextPaternalSurname,
+          maternalSurname: nextMaternalSurname,
+          groupId: nextGroup.id,
+        });
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setStudents((current) => current
+          .map((item) => item.id === student.id ? result.student : item)
+          .sort(compareStudentsByListNumber));
+        closeEditStudent();
+        setNotice({ type: "success", text: `${result.student.name} fue actualizado correctamente.` });
+        router.refresh();
+      });
+    };
+
+    const summary = [
+      nameChanged ? `Nombre: “${previousName}” → “${nextName}”` : null,
+      groupChanged ? `Grupo: ${student.group} → ${nextGroup.name}` : null,
+    ].filter(Boolean).join("\n");
+
+    if (groupChanged) {
+      requestConfirmation({
+        title: "Cambiar de grupo",
+        message: `${student.name} pasará de ${student.group} a ${nextGroup.name}, y su matrícula cambiará de ${previousMatricula} a ${nextMatricula}. ¿Deseas continuar?`,
+        confirmLabel: "Sí, mover de grupo",
+        tone: "danger",
+      }, () => {
+        requestConfirmation({
+          title: "Guardar cambios del alumno",
+          message: summary,
+          confirmLabel: "Sí, guardar cambios",
+        }, applyChanges);
+      });
+      return;
+    }
+
+    requestConfirmation({
+      title: "Guardar cambios del alumno",
+      message: summary,
+      confirmLabel: "Sí, guardar cambios",
+    }, applyChanges);
+  };
+
   return (
     <>
       {confirmationDialog}
@@ -1308,6 +1411,18 @@ function GroupStudentManagement({
         <div className="student-counter"><span>{groups.length}</span><div><small>GRUPOS REGISTRADOS</small><strong>{students.length} alumnos en total</strong></div></div>
       </div>
       {notice && <div className={`notice notice-${notice.type} catalog-notice`}><Icon name={notice.type === "success" ? "check" : "alert"} /><div><strong>{notice.type === "success" ? "Catálogo actualizado" : "Revisa la información"}</strong><p>{notice.text}</p></div></div>}
+      {editingStudent && (
+        <form className="panel management-form catalog-edit-form" onSubmit={saveEditStudent}>
+          <div className="panel-head"><div><p className="eyebrow">EDITAR ALUMNO</p><h2>{editingStudent.name}</h2></div><button type="button" className="delete-button" onClick={closeEditStudent} aria-label="Cerrar edición"><Icon name="close" size={16} /></button></div>
+          <div className="management-fields catalog-student-fields">
+            <label>Apellido paterno<input required value={editPaternalSurname} onChange={(event) => setEditPaternalSurname(event.target.value)} /></label>
+            <label>Apellido materno<input value={editMaternalSurname} onChange={(event) => setEditMaternalSurname(event.target.value)} /></label>
+            <label>Nombre(s)<input required value={editGivenNames} onChange={(event) => setEditGivenNames(event.target.value)} /></label>
+            <label>Grupo<select required value={editGroupId} onChange={(event) => setEditGroupId(event.target.value)}>{groups.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+            <button className="primary-button" type="submit" disabled={isPending}><Icon name="check" size={18} /> {isPending ? "Guardando…" : "Guardar cambios"}</button>
+          </div>
+        </form>
+      )}
       <div className="catalog-forms">
         <form className="panel management-form" onSubmit={addGroup}>
           <div className="panel-head"><div><p className="eyebrow">NUEVO GRUPO</p><h2>Crear grupo</h2></div><span className="form-icon"><Icon name="users" /></span></div>
@@ -1347,7 +1462,10 @@ function GroupStudentManagement({
             <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
             <span className="group-badge">{student.group}</span>
             <span className="teacher-badge">{teacherNameForGroup(groups.find((group) => group.name === student.group)?.id ?? "")}</span>
-            {canDelete && <button className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
+            <div className="student-row-actions">
+              <button className="secondary-button" onClick={() => openEditStudent(student)} disabled={isPending} aria-label={`Editar a ${student.name}`}><Icon name="plus" size={16} /> Editar</button>
+              {canDelete && <button className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
+            </div>
           </div>)}
           {visibleStudents.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos</strong><p>No hay alumnos que coincidan con los filtros seleccionados.</p></div>}
         </div>

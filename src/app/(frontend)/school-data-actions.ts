@@ -761,30 +761,126 @@ export async function updateStudentAction(
   input: Partial<StudentInput>,
 ): Promise<{ ok: true; student: Student } | { ok: false; error: string }> {
   const user = await appAuth.currentUser()
-  if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
-    return { ok: false, error: "No tienes permiso para actualizar alumnos." }
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "No tienes permiso para editar alumnos." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
+  const numericId = Number(id)
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return { ok: false, error: "Identificador inválido." }
+  }
   const data: Record<string, string | number> = {}
-  if (isString(input.firstName)) data.firstName = input.firstName.trim()
-  if (isString(input.paternalSurname)) data.paternalSurname = input.paternalSurname.trim()
-  if (isString(input.maternalSurname)) data.maternalSurname = input.maternalSurname.trim()
-  if (isString(input.lastName)) data.lastName = input.lastName.trim()
-  if (isString(input.matricula)) data.matricula = input.matricula.trim()
-  if (isString(input.groupId)) data.group = Number(input.groupId)
-  if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
+  if (input.firstName !== undefined) {
+    if (!isString(input.firstName) || !input.firstName.trim()) {
+      return { ok: false, error: "El nombre del alumno no es válido." }
+    }
+    data.firstName = input.firstName.trim()
+  }
+  if (input.paternalSurname !== undefined) {
+    if (!isString(input.paternalSurname) || !input.paternalSurname.trim()) {
+      return { ok: false, error: "El apellido paterno no es válido." }
+    }
+    data.paternalSurname = input.paternalSurname.trim()
+  }
+  if (input.maternalSurname !== undefined) {
+    if (!isString(input.maternalSurname)) {
+      return { ok: false, error: "El apellido materno no es válido." }
+    }
+    data.maternalSurname = input.maternalSurname.trim()
+  }
+  if (input.lastName !== undefined) {
+    if (!isString(input.lastName)) {
+      return { ok: false, error: "Los apellidos no son válidos." }
+    }
+    data.lastName = input.lastName.trim()
+  }
+  let nextGroupId: number | null = null
+  if (input.groupId !== undefined) {
+    if (!isString(input.groupId) || !input.groupId.trim()) {
+      return { ok: false, error: "El grupo seleccionado no es válido." }
+    }
+    const parsed = Number(input.groupId)
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return { ok: false, error: "El grupo seleccionado no es válido." }
+    }
+    nextGroupId = parsed
+  }
+  if (!Object.keys(data).length && nextGroupId === null) {
+    return { ok: false, error: "No hay cambios para guardar." }
+  }
   try {
     const payload = await getPayload({ config })
+
+    const current = await payload.findByID({
+      collection: "students",
+      id: numericId,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    }) as StudentDoc | null
+    if (!current) return { ok: false, error: "El alumno no existe." }
+
+    const currentGroupId = getRelationId(current.group)
+    const groupChanged = nextGroupId !== null && String(nextGroupId) !== currentGroupId
+
+    if (groupChanged) {
+      const group = await payload.findByID({
+        collection: "groups",
+        id: nextGroupId as number,
+        depth: 0,
+        overrideAccess: false,
+        user,
+      }) as GroupDoc | null
+      if (!group) return { ok: false, error: "El grupo seleccionado no existe." }
+
+      const listNumber = parseListNumber(current.matricula)
+      if (!listNumber) {
+        return { ok: false, error: "El alumno no tiene un número de lista válido en su matrícula." }
+      }
+      const nextMatricula = `${group.name.replace(/\s+/g, "")}-${listNumber}`
+      const collision = await payload.find({
+        collection: "students",
+        where: {
+          and: [
+            { matricula: { equals: nextMatricula } },
+            { id: { not_equals: numericId } },
+          ],
+        },
+        limit: 1,
+        depth: 0,
+        overrideAccess: false,
+        user,
+      })
+      if (collision.docs.length > 0) {
+        return {
+          ok: false,
+          error: `El número de lista ${listNumber} ya está ocupado en ${group.name}. Ajusta la matrícula antes de mover al alumno.`,
+        }
+      }
+      data.group = nextGroupId as number
+      data.matricula = nextMatricula
+    }
+
     const doc = await payload.update({
       collection: "students",
-      id,
+      id: numericId,
       data,
       overrideAccess: false,
       user,
     })
-    return { ok: true, student: mapStudentDoc(doc as StudentDoc, 0) }
-  } catch {
-    return { ok: false, error: "No fue posible actualizar el alumno." }
+    return { ok: true, student: mapStudentDoc(doc as StudentDoc, parseListNumber((doc as StudentDoc).matricula)) }
+  } catch (error: any) {
+    console.error(
+      "UPDATE STUDENT ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    if (/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
+      return { ok: false, error: "Esa matrícula ya está registrada." }
+    }
+    return {
+      ok: false,
+      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible actualizar el alumno.",
+    }
   }
 }
 
