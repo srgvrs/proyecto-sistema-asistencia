@@ -359,6 +359,7 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
 .management-list-head { gap: 20px; }
 .management-list-filters { display: flex; align-items: center; gap: 8px; }
 .management-list-filters > select { color: #284b40; background: #f8faf9; border: 1px solid #dce5e0; border-radius: 7px; outline: none; padding: 8px 9px; font-size: 9px; }
+.student-management-table { overflow-x: auto; }
 .student-management-head, .student-management-row { display: grid; grid-template-columns: 72px minmax(210px, 1fr) 80px minmax(140px, .8fr) 92px; align-items: center; gap: 14px; padding: 12px 20px; }
 .student-management-head { color: #80918a; background: #f9fbfa; border-bottom: 1px solid #e7edea; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
 .student-management-row { min-height: 64px; border-bottom: 1px solid #edf1ef; }
@@ -367,6 +368,15 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
 .student-management-row strong, .student-management-row small { display: block; }
 .student-management-row strong { color: #28493e; font-size: 10px; }
 .student-management-row small { color: #87968f; font-size: 8px; margin-top: 3px; }
+.catalog-list .student-management-head, .catalog-list .student-management-row { grid-template-columns: 72px minmax(180px, 1fr) 80px minmax(120px, .8fr) minmax(190px, auto); }
+.student-row-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+.student-row-actions > button { white-space: nowrap; flex: 0 0 auto; }
+.student-row-actions .secondary-button { padding: 7px 10px; font-size: 8px; }
+.student-row-actions .delete-button { padding: 7px 8px; font-size: 8px; }
+.catalog-edit-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(4,25,19,.58); backdrop-filter: blur(5px); animation: confirmation-fade .16s ease-out; }
+.catalog-edit-form { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; animation: confirmation-rise .18s ease-out; }
+.catalog-edit-form .catalog-student-fields { grid-template-columns: 1fr 1fr; }
+.catalog-edit-form .catalog-student-fields > .primary-button { grid-column: 1 / -1; width: 100%; }
 .group-badge { justify-self: start; color: #285f4c; background: #e5f1ec; border-radius: 6px; padding: 6px 9px; font-size: 9px; font-weight: 700; }
 .teacher-badge { justify-self: start; color: #315f82; background: #eaf2f8; border-radius: 6px; padding: 6px 9px; font-size: 9px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .delete-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: #98483c; background: #faebe8; border: 1px solid #edcec8; border-radius: 6px; padding: 7px 8px; font-size: 8px; font-weight: 700; }
@@ -701,6 +711,9 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
   .student-management-row .group-badge { grid-column: 2; margin-left: 42px; }
   .student-management-row .teacher-badge { grid-column: 2; margin-left: 42px; }
   .student-management-row .delete-button { grid-column: 3; grid-row: 1 / 4; }
+  .catalog-list .student-management-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .catalog-list .student-management-row .student-row-actions { grid-column: 3; grid-row: 1 / 4; flex-direction: column; align-items: stretch; }
+  .catalog-edit-form .catalog-student-fields { grid-template-columns: 1fr; }
   .official-list-controls { grid-template-columns: 1fr 1fr; }
   .official-list-controls > div { grid-column: 1 / -1; justify-self: stretch; text-align: left; }
   .official-sheet-header { grid-template-columns: 140px 1fr 58px; }
