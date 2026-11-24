@@ -2,6 +2,7 @@ import React from "react"
 import type { Metadata } from "next"
 import Script from "next/script"
 import { BodyCustomCode, renderHeadCustomCode } from "@/lib/make-custom-code"
+import { PRE_HYDRATION_SCRIPT } from "./accessibility-preferences"
 import {
   makeSiteSettings,
   sanitizeHtmlAttribute,
@@ -55,6 +56,7 @@ export default function RootLayout({
   return (
     <html lang={language}>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: PRE_HYDRATION_SCRIPT }} />
         {renderHeadCustomCode(customScripts?.headStart, "head-start")}
         {renderHeadCustomCode(customScripts?.headEnd, "head-end")}
       </head>

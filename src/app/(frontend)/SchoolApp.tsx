@@ -29,6 +29,7 @@ import type { AppUserSummary, Role } from "@/lib/app-user-types";
 import { todayISO } from "@/lib/school-data-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 import { compareStudentsAlphabetically, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
+import { AccessibilityControls } from "./AccessibilityControls";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes";
 type NavigationItem = { view: View; icon: string; label: string; description: string; keywords: string };
@@ -393,6 +394,7 @@ function App({
               </div>
             )}
           </div>
+          <AccessibilityControls variant="topbar" />
           <div className="user-chip">
             <span>{session.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
             <div><strong>{session.name}</strong><small>{session.role}</small></div>
@@ -512,6 +514,7 @@ function Login({ onLogin }: { onLogin: (user: AppUserSummary, users: AppUserSumm
   };
   return (
     <div className="login-page">
+      <AccessibilityControls variant="floating" />
       <div className="login-brand">
         <div className="school-seal"><Image src={schoolLogo} alt="Escudo de la Escuela Primaria Vicente Suárez" priority unoptimized /></div>
         <p>Escuela Primaria</p>
