@@ -2312,7 +2312,6 @@ export async function previewSchoolYearCloseAction(
       const destinationGroupName = isGraduating ? "Egresado" : `${grade + 1}° ${letter}`
       const destinationGroup = isGraduating ? null : groupsByName.get(destinationGroupName) ?? null
       const destinationWillBeCreated = !isGraduating && !destinationGroup
-      if (destinationWillBeCreated) groupsToCreateNames.add(destinationGroupName)
 
       const groupStudents = (studentsByGroupId.get(String(group.id)) || [])
         .filter((doc) => (doc.status ?? "Activo") === "Activo")
@@ -2389,6 +2388,9 @@ export async function previewSchoolYearCloseAction(
           matriculaConflict,
         })
       }
+
+      const studentsToMove = studentPlans.filter((plan) => !excludedIds.has(plan.id) && plan.destination !== plan.currentGroup).length
+      if (destinationWillBeCreated && studentsToMove > 0) groupsToCreateNames.add(destinationGroupName)
 
       groups.push({
         groupId: String(group.id),
@@ -2684,6 +2686,8 @@ export async function closeSchoolYearAction(
         }
         continue
       }
+
+      if (plannedGroup.students.length === 0) continue
 
       let destinationGroup = groupsByName.get(plannedGroup.destinationGroupName) ?? null
       if (!destinationGroup) {

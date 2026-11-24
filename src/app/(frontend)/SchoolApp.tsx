@@ -516,6 +516,7 @@ function App({
               groups={groups}
               teacherGroups={teacherGroups}
               onNavigate={navigate}
+              onRefresh={refreshSchoolState}
             />
           )}
           {view === "reportes" && session.role !== "Vigilante de Acceso" && <Reports records={records} students={students} groups={groups.map((group) => group.name)} assignments={teacherGroups} allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined} initialTemplates={initialTemplates} />}
@@ -3182,10 +3183,12 @@ function SchoolYearClose({
   groups,
   teacherGroups,
   onNavigate,
+  onRefresh,
 }: {
   groups: GroupRef[];
   teacherGroups: Record<string, string[]>;
   onNavigate: (view: View) => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
   const [preview, setPreview] = useState<SchoolYearClosePreview | null>(null);
@@ -3289,6 +3292,10 @@ function SchoolYearClose({
         createdGroups: response.createdGroups,
         errors: response.errors,
       });
+      if (response.ok) {
+        await onRefresh();
+        loadPreview(excluded);
+      }
     });
   };
 
