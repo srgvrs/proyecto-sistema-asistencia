@@ -14,19 +14,31 @@ export default async function HomePage() {
   const schoolStateResult = currentUser ? await loadSchoolStateAction() : null
   const schoolState: SchoolStateData | null = schoolStateResult?.ok ? schoolStateResult.data : null
   console.log("PAGE", !!currentUser, schoolStateResult?.ok, schoolState?.students.length ?? null)
-  const templates = await payload.find({
-    collection: "report-templates",
-    limit: 20,
-    sort: "-createdAt",
-    overrideAccess: false,
-  })
+  let templates: ReportTemplate[] = []
+  if (currentUser) {
+    try {
+      const result = await payload.find({
+        collection: "report-templates",
+        limit: 20,
+        sort: "-createdAt",
+        overrideAccess: false,
+        user: currentUser,
+      })
+      templates = result.docs as ReportTemplate[]
+    } catch (error) {
+      console.error(
+        "No fue posible cargar las plantillas de reportes:",
+        error instanceof Error ? error.message : error,
+      )
+    }
+  }
 
   return (
     <SchoolApp
       key={`${currentUser?.id ?? "anon"}-${schoolState?.students.length ?? 0}-${schoolState?.groups.length ?? 0}-${schoolState?.teachers.length ?? 0}`}
       initialSession={currentUser ? toAppUserSummary(currentUser) : null}
       initialSchoolState={schoolState}
-      initialTemplates={templates.docs as ReportTemplate[]}
+      initialTemplates={templates}
       initialUsers={users}
     />
   )
