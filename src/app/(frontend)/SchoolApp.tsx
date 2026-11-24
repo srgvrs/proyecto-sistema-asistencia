@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import schoolLogo from "./school-logo.png";
 import { createUserAction, loginAction, logoutAction, resetUserPasswordAction } from "./auth-actions";
 import {
@@ -12,6 +13,7 @@ import {
   createTeacherAttendanceAction,
   createTeacherJustificationAction,
   createVisitorAction,
+  deleteStudentAction,
   deleteTeacherAction,
   deleteTeacherJustificationAction,
   deleteVisitorAction,
@@ -432,6 +434,7 @@ function App({
               groups={groups.filter((group) => (teacherGroups[session.name] || []).includes(group.name))}
               setStudents={setStudents}
               onDeleteRecords={(studentId) => setRecords((current) => current.filter((record) => record.studentId !== studentId))}
+              canDelete={false}
             />
           )}
           {view === "docentes" && session.role === "Docente" && (
@@ -464,6 +467,7 @@ function App({
               setStudents={setStudents}
               groupTeacherMap={groupTeacherMap}
               onDeleteRecords={(studentId) => setRecords((current) => current.filter((record) => record.studentId !== studentId))}
+              canDelete={true}
             />
           )}
           {view === "personal" && session.role === "Directivo" && (
@@ -1004,12 +1008,15 @@ function StudentManagement({
   groups,
   setStudents,
   onDeleteRecords,
+  canDelete,
 }: {
   students: Student[];
   groups: GroupRef[];
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
   onDeleteRecords: (studentId: string) => void;
+  canDelete: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const availableGroups = groups.length ? groups.map((group) => group.name) : [...new Set(students.map((student) => student.group))].sort();
   const [givenNames, setGivenNames] = useState("");
@@ -1088,9 +1095,18 @@ function StudentManagement({
       confirmLabel: "Sí, eliminar",
       tone: "danger",
     }, () => {
-      setStudents((current) => current.filter((item) => item.id !== student.id));
-      onDeleteRecords(student.id);
-      setNotice({ type: "success", text: `${student.name} fue eliminado de la lista.` });
+      setNotice(null);
+      startTransition(async () => {
+        const result = await deleteStudentAction(student.id);
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setStudents((current) => current.filter((item) => item.id !== student.id));
+        onDeleteRecords(student.id);
+        setNotice({ type: "success", text: `${student.name} fue eliminado de la lista.` });
+        router.refresh();
+      });
     });
   };
 
@@ -1133,7 +1149,7 @@ function StudentManagement({
                 <StudentListNumberEditor student={student} students={students} setStudents={setStudents} />
                 <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
                 <span className="group-badge">{student.group}</span>
-                <button className="delete-button" onClick={() => deleteStudent(student)} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>
+                {canDelete && <button className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
               </div>)}
               {visibleStudents.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos</strong><p>No hay alumnos que coincidan con la búsqueda.</p></div>}
             </div>
@@ -1151,6 +1167,7 @@ function GroupStudentManagement({
   setStudents,
   groupTeacherMap,
   onDeleteRecords,
+  canDelete,
 }: {
   groups: GroupRef[];
   students: Student[];
@@ -1158,7 +1175,9 @@ function GroupStudentManagement({
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
   groupTeacherMap: Record<string, string>;
   onDeleteRecords: (studentId: string) => void;
+  canDelete: boolean;
 }) {
+  const router = useRouter();
   const teacherNameForGroup = (groupId: string) => groupTeacherMap[groupId] || "Sin docente asignado";
   const [isPending, startTransition] = useTransition();
   const groupNames = groups.map((item) => item.name);
@@ -1263,9 +1282,18 @@ function GroupStudentManagement({
       confirmLabel: "Sí, eliminar",
       tone: "danger",
     }, () => {
-      setStudents((current) => current.filter((item) => item.id !== student.id));
-      onDeleteRecords(student.id);
-      setNotice({ type: "success", text: `${student.name} fue eliminado del grupo ${student.group}.` });
+      setNotice(null);
+      startTransition(async () => {
+        const result = await deleteStudentAction(student.id);
+        if (!result.ok) {
+          setNotice({ type: "error", text: result.error });
+          return;
+        }
+        setStudents((current) => current.filter((item) => item.id !== student.id));
+        onDeleteRecords(student.id);
+        setNotice({ type: "success", text: `${student.name} fue eliminado del grupo ${student.group}.` });
+        router.refresh();
+      });
     });
   };
 
@@ -1316,7 +1344,7 @@ function GroupStudentManagement({
             <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
             <span className="group-badge">{student.group}</span>
             <span className="teacher-badge">{teacherNameForGroup(groups.find((group) => group.name === student.group)?.id ?? "")}</span>
-            <button className="delete-button" onClick={() => deleteStudent(student)} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>
+            {canDelete && <button className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
           </div>)}
           {visibleStudents.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos</strong><p>No hay alumnos que coincidan con los filtros seleccionados.</p></div>}
         </div>

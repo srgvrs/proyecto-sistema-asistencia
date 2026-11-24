@@ -763,12 +763,23 @@ export async function deleteStudentAction(
     return { ok: false, error: "No tienes permiso para eliminar alumnos." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
+  const numericId = Number(id)
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return { ok: false, error: "Identificador inválido." }
+  }
   try {
     const payload = await getPayload({ config })
-    await payload.delete({ collection: "students", id, overrideAccess: false, user })
+    await payload.delete({ collection: "students", id: numericId, overrideAccess: false, user })
     return { ok: true }
-  } catch {
-    return { ok: false, error: "No fue posible eliminar el alumno." }
+  } catch (error: any) {
+    console.error(
+      "DELETE STUDENT ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return {
+      ok: false,
+      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible eliminar el alumno.",
+    }
   }
 }
 
