@@ -512,7 +512,11 @@ function App({
             <UserManagement users={users} setUsers={setUsers} />
           )}
           {view === "cierre-ciclo" && session.role === "Directivo" && (
-            <SchoolYearClose />
+            <SchoolYearClose
+              groups={groups}
+              teacherGroups={teacherGroups}
+              onNavigate={navigate}
+            />
           )}
           {view === "reportes" && session.role !== "Vigilante de Acceso" && <Reports records={records} students={students} groups={groups.map((group) => group.name)} assignments={teacherGroups} allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined} initialTemplates={initialTemplates} />}
         </section>
@@ -3174,7 +3178,15 @@ type SchoolYearCloseResult = {
   errors: string[];
 };
 
-function SchoolYearClose() {
+function SchoolYearClose({
+  groups,
+  teacherGroups,
+  onNavigate,
+}: {
+  groups: GroupRef[];
+  teacherGroups: Record<string, string[]>;
+  onNavigate: (view: View) => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const [preview, setPreview] = useState<SchoolYearClosePreview | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -3188,6 +3200,14 @@ function SchoolYearClose() {
   const confirmPendingRef = useRef(false);
   const [confirmPending, setConfirmPending] = useState(false);
   const executed = result?.ok === true;
+  const groupsWithoutTeacher = useMemo(() => {
+    if (!executed) return [];
+    const assigned = new Set(Object.values(teacherGroups).flat());
+    return groups
+      .filter((group) => !assigned.has(group.name))
+      .map((group) => group.name)
+      .sort((a, b) => a.localeCompare(b, "es-MX", { sensitivity: "base" }));
+  }, [executed, groups, teacherGroups]);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -3290,6 +3310,30 @@ function SchoolYearClose() {
             {result.errors.length > 0 && result.errors.map((message) => <p key={message}>{message}</p>)}
           </div>
         </div>
+      )}
+      {executed && (
+        <section className="panel management-list">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">SIGUIENTE PASO</p>
+              <h2>Grupos sin docente asignado</h2>
+            </div>
+            <button className="secondary-button" type="button" onClick={() => onNavigate("grupos")}>
+              <Icon name="link" size={16} /> Asignar grupos
+            </button>
+          </div>
+          {groupsWithoutTeacher.length > 0 ? (
+            <div className="assigned-groups">
+              {groupsWithoutTeacher.map((groupName) => (
+                <div className="assigned-group" key={groupName}>
+                  <span><Icon name="users" size={17} /> {groupName}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state"><Icon name="check" /><strong>Todos los grupos tienen docente</strong><p>No hay grupos pendientes de asignación.</p></div>
+          )}
+        </section>
       )}
       {preview && preview.warnings.length > 0 && (
         <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>Avisos</strong>{preview.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div></div>
