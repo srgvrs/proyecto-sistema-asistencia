@@ -23,6 +23,7 @@ import {
 } from "./school-data-actions";
 import type { AppUserSummary, Role } from "@/lib/app-user-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
+import { compareStudentsAlphabetically, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes";
 type NavigationItem = { view: View; icon: string; label: string; description: string; keywords: string };
@@ -47,16 +48,7 @@ const getStudentNameParts = (student: Student) => {
   };
 };
 
-const compareStudentsByPaternalSurname = (a: Student, b: Student) => {
-  const options = { sensitivity: "base" as const };
-  const aName = getStudentNameParts(a);
-  const bName = getStudentNameParts(b);
-  return (
-    aName.paternalSurname.localeCompare(bName.paternalSurname, "es-MX", options) ||
-    aName.maternalSurname.localeCompare(bName.maternalSurname, "es-MX", options) ||
-    aName.givenNames.localeCompare(bName.givenNames, "es-MX", options)
-  );
-};
+const compareStudentsByPaternalSurname = compareStudentsAlphabetically;
 
 const compareStudentsByListNumber = (a: Student, b: Student) =>
   a.listNumber - b.listNumber || compareStudentsByPaternalSurname(a, b);
@@ -1037,10 +1029,10 @@ function StudentManagement({
     }
   }, [availableGroups, group, students]);
 
-  const visibleStudents = students.filter((student) =>
-    student.group === group &&
+  const numberedGroupStudents = sortAndNumberGroupStudents(students, group);
+  const visibleStudents = numberedGroupStudents.filter((student) =>
     `${student.name} ${student.group} ${student.listNumber}`.toLowerCase().includes(search.toLowerCase()),
-  ).sort(compareStudentsByListNumber);
+  );
 
   const addStudent = (event: React.FormEvent) => {
     event.preventDefault();
@@ -1181,10 +1173,11 @@ function GroupStudentManagement({
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const { requestConfirmation, confirmationDialog } = useConfirmation();
-  const visibleStudents = students.filter((student) =>
+  const numberedStudents = sortAndNumberStudents(students);
+  const visibleStudents = numberedStudents.filter((student) =>
     (!groupFilter || student.group === groupFilter) &&
     `${student.name} ${student.listNumber}`.toLowerCase().includes(search.toLowerCase()),
-  ).sort(compareStudentsByListNumber);
+  );
 
   const addGroup = (event: React.FormEvent) => {
     event.preventDefault();
@@ -2161,9 +2154,9 @@ function RollCall({
       setNotice("");
     }
   }, [availableGroups, group]);
-  const groupStudents = students
-    .filter((student) => availableGroups.includes(group) && student.group === group)
-    .sort(compareStudentsByListNumber);
+  const groupStudents = availableGroups.includes(group)
+    ? sortAndNumberGroupStudents(students, group)
+    : [];
   const officialList = availableGroups.includes(group)
     ? officialLists.find((list) => list.id === `${group}-${date.slice(0, 7)}`)
     : undefined;
@@ -2690,10 +2683,7 @@ function Reports({
     if (!selectedGroup || !availableGroups.includes(selectedGroup)) setSelectedGroup(availableGroups[0] || "");
   }, [availableGroups, selectedGroup]);
 
-  const groupStudents = students
-    .filter((student) => student.group === selectedGroup)
-    .slice()
-    .sort(compareStudentsByListNumber);
+  const groupStudents = sortAndNumberGroupStudents(students, selectedGroup);
 
   const rows = useMemo(() => groupStudents.map((student) => {
     const statusByDate = new Map<string, Status>();
