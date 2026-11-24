@@ -488,7 +488,7 @@ export async function loadSchoolStateAction(): Promise<
       try {
         return await payload.find(args)
       } catch (e) {
-        console.error("FIND FALLÓ", args.collection, (e as any)?.message)
+        console.warn("FIND FALLÓ", args.collection, (e as any)?.message)
         return { docs: [], totalDocs: 0 } as any
       }
     }
