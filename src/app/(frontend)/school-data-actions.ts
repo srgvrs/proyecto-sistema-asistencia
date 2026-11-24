@@ -63,6 +63,24 @@ const assertDocenteOwnsStudent = async (
   return String(resolvedTeacherId ?? "") === String(user.id)
 }
 
+const isStudentInOfficialMarks = async (
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  studentId: number | string,
+): Promise<boolean> => {
+  const result = await payload.find({
+    collection: "official-lists",
+    limit: 500,
+    depth: 0,
+    overrideAccess: true,
+  })
+  for (const doc of result.docs as OfficialListDoc[]) {
+    const marks = doc.marks
+    if (!marks || typeof marks !== "object" || Array.isArray(marks)) continue
+    if (String(studentId) in marks) return true
+  }
+  return false
+}
+
 const isDateOfficialized = async (
   payload: Awaited<ReturnType<typeof getPayload>>,
   groupId: number | string,
@@ -909,7 +927,7 @@ export async function deleteStudentAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await appAuth.currentUser()
-  if (!user || user.role !== "Directivo") {
+  if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para eliminar alumnos." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
@@ -920,10 +938,20 @@ export async function deleteStudentAction(
   try {
     const payload = await getPayload({ config })
 
+    if (user.role === "Docente") {
+      const owns = await assertDocenteOwnsStudent(payload, numericId, user)
+      if (!owns) {
+        return { ok: false, error: "No tienes permiso sobre este alumno." }
+      }
+      if (await isStudentInOfficialMarks(payload, numericId)) {
+        return { ok: false, error: "El alumno tiene asistencia oficializada. Solo el Directivo puede eliminarlo." }
+      }
+    }
+
     await payload.delete({
       collection: "attendance",
       where: { student: { equals: numericId } },
-      overrideAccess: false,
+      overrideAccess: user.role === "Docente",
       user,
     })
 
