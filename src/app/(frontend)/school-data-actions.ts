@@ -277,7 +277,7 @@ const getGroupMatriculaCounter = async (
   payload: Awaited<ReturnType<typeof getPayload>>,
   groupId: number,
   groupName: string,
-  user: { id: number | string },
+  user: ActionUser,
 ): Promise<number> => {
   const group = await payload.findByID({
     collection: "groups",
@@ -309,7 +309,7 @@ const bumpGroupMatriculaCounter = async (
   payload: Awaited<ReturnType<typeof getPayload>>,
   groupId: number,
   value: number,
-  user: { id: number | string },
+  user: ActionUser,
 ): Promise<void> => {
   try {
     await payload.update({
