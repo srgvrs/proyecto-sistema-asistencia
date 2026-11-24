@@ -17,6 +17,29 @@ import type {
 
 const isString = (value: unknown): value is string => typeof value === "string"
 
+const todayISO = (): string => {
+  const now = new Date()
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now)
+  const year = parts.find((part) => part.type === "year")?.value ?? ""
+  const month = parts.find((part) => part.type === "month")?.value ?? ""
+  const day = parts.find((part) => part.type === "day")?.value ?? ""
+  return `${year}-${month}-${day}`
+}
+
+const getCycleLabel = (date: string): string => {
+  const [yearText, monthText] = date.split("-")
+  const year = Number(yearText)
+  const month = Number(monthText)
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return ""
+  const startYear = month >= 9 ? year : year - 1
+  return `${startYear}–${startYear + 1}`
+}
+
 const MAX_NAME_LENGTH = 60
 
 const normalizePersonName = (value: string): string =>

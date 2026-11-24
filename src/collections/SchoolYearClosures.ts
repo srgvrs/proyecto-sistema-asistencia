@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+type AppUser = { role?: string | null }
+
 export const SchoolYearClosures: CollectionConfig = {
   slug: 'school-year-closures',
   admin: {
@@ -7,8 +9,8 @@ export const SchoolYearClosures: CollectionConfig = {
     defaultColumns: ['cycleLabel', 'closedAt', 'closedBy', 'promoted', 'graduated'],
   },
   access: {
-    create: ({ req: { user } }) => user?.role === 'Directivo',
-    read: ({ req: { user } }) => user?.role === 'Directivo',
+    create: ({ req: { user } }) => (user as AppUser | null)?.role === 'Directivo',
+    read: ({ req: { user } }) => (user as AppUser | null)?.role === 'Directivo',
     update: () => false,
     delete: () => false,
   },
