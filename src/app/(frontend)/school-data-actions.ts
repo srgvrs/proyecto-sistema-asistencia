@@ -471,6 +471,73 @@ const mapOfficialListDoc = (
   }
 }
 
+export async function loadOfficialAttendanceStatusAction(
+  input: { listId: string; date: string },
+): Promise<
+  | { ok: true; statuses: Record<string, Status> }
+  | { ok: false; error: string }
+> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede consultar la asistencia oficial." }
+  }
+  if (!isString(input.listId) || !isISODate(input.date)) {
+    return { ok: false, error: "Los datos de la consulta no son válidos." }
+  }
+  const numericListId = Number(input.listId)
+  if (!Number.isInteger(numericListId) || numericListId <= 0) {
+    return { ok: false, error: "Identificador inválido." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    const listDoc = await payload.findByID({
+      collection: "official-lists",
+      id: numericListId,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    }) as OfficialListDoc | null
+    if (!listDoc) return { ok: false, error: "La lista oficial no existe." }
+    const existingMarks = (listDoc.marks && typeof listDoc.marks === "object" && !Array.isArray(listDoc.marks))
+      ? (listDoc.marks as Record<string, Record<string, "." | "X">>)
+      : {}
+    const dateInMarks = Object.values(existingMarks).some(
+      (studentMarks) => studentMarks && typeof studentMarks === "object" && input.date in studentMarks,
+    )
+    if (!dateInMarks) {
+      return { ok: false, error: "La fecha no pertenece a esta lista oficial." }
+    }
+    const roster = parseRoster(listDoc.roster) ?? []
+    const studentIds = roster.map((entry) => Number(entry.studentId)).filter((id) => Number.isInteger(id) && id > 0)
+    const statuses: Record<string, Status> = {}
+    for (const entry of roster) statuses[entry.studentId] = "Presente"
+    if (studentIds.length) {
+      const attendance = await payload.find({
+        collection: "attendance",
+        where: {
+          and: [
+            { student: { in: studentIds } },
+            { date: { equals: `${input.date}T00:00:00.000Z` } },
+          ],
+        },
+        limit: 500,
+        overrideAccess: false,
+        user,
+      })
+      for (const doc of attendance.docs as AttendanceDoc[]) {
+        statuses[getRelationId(doc.student)] = mapStatusFromCollection(doc.status)
+      }
+    }
+    return { ok: true, statuses }
+  } catch (error: any) {
+    console.error(
+      "LOAD OFFICIAL ATTENDANCE STATUS ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return { ok: false, error: "No fue posible consultar la asistencia oficial." }
+  }
+}
+
 type CorrectOfficialAttendanceInput = {
   listId: string
   date: string

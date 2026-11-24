@@ -18,8 +18,10 @@ import {
   studentAppearsInOfficialMarksAction,
   deleteTeacherJustificationAction,
   deleteVisitorAction,
+  loadOfficialAttendanceStatusAction,
   loadSchoolStateAction,
   officializeAttendanceAction,
+  correctOfficialAttendanceAction,
   updateStudentAction,
   updateTeacherAttendanceAction,
   updateTeacherEmploymentStatusAction,
@@ -423,7 +425,12 @@ function App({
             />
           )}
           {view === "listas-oficiales" && session.role === "Directivo" && (
-            <OfficialListsArchive officialLists={officialLists} groups={groups.map((group) => group.name)} />
+            <OfficialListsArchive
+              officialLists={officialLists}
+              groups={groups.map((group) => group.name)}
+              canCorrect={session.role === "Directivo"}
+              replaceOfficialLists={replaceOfficialLists}
+            />
           )}
           {view === "alumnos" && session.role === "Docente" && (
             <StudentManagement
@@ -2208,7 +2215,18 @@ function OfficialAttendanceSheet({ list }: { list: OfficialAttendanceList }) {
   );
 }
 
-function OfficialListsArchive({ officialLists, groups }: { officialLists: OfficialAttendanceList[]; groups: string[] }) {
+function OfficialListsArchive({
+  officialLists,
+  groups,
+  canCorrect,
+  replaceOfficialLists,
+}: {
+  officialLists: OfficialAttendanceList[];
+  groups: string[];
+  canCorrect: boolean;
+  replaceOfficialLists: (lists: OfficialAttendanceList[]) => void;
+}) {
+  const router = useRouter();
   const availableGroups = [...new Set([...groups, ...officialLists.map((list) => list.group)])].sort();
   const [group, setGroup] = useState(availableGroups[0] || "");
   const groupLists = officialLists
@@ -2216,6 +2234,14 @@ function OfficialListsArchive({ officialLists, groups }: { officialLists: Offici
     .slice()
     .sort((a, b) => b.month.localeCompare(a.month));
   const [month, setMonth] = useState(groupLists[0]?.month || "");
+  const [correctionDate, setCorrectionDate] = useState<string | null>(null);
+  const [correctionStatuses, setCorrectionStatuses] = useState<Record<string, Status>>({});
+  const [correctionBaseline, setCorrectionBaseline] = useState<Record<string, Status>>({});
+  const [correctionLoading, setCorrectionLoading] = useState(false);
+  const [correctionError, setCorrectionError] = useState("");
+  const [correctionPartialErrors, setCorrectionPartialErrors] = useState<string[]>([]);
+  const [isPending, startTransition] = useTransition();
+  const { requestConfirmation, confirmationDialog } = useConfirmation();
 
   useEffect(() => {
     if (!availableGroups.includes(group)) setGroup(availableGroups[0] || "");
@@ -2225,8 +2251,80 @@ function OfficialListsArchive({ officialLists, groups }: { officialLists: Offici
   }, [groupLists, month]);
 
   const selectedList = groupLists.find((list) => list.month === month);
+
+  const openCorrection = async (date: string) => {
+    if (!selectedList) return;
+    setCorrectionError("");
+    setCorrectionPartialErrors([]);
+    setCorrectionDate(date);
+    setCorrectionStatuses({});
+    setCorrectionBaseline({});
+    setCorrectionLoading(true);
+    const result = await loadOfficialAttendanceStatusAction({ listId: selectedList.id, date });
+    setCorrectionLoading(false);
+    if (!result.ok) {
+      setCorrectionError(result.error);
+      return;
+    }
+    setCorrectionStatuses(result.statuses);
+    setCorrectionBaseline(result.statuses);
+  };
+
+  const closeCorrection = () => {
+    if (isPending) return;
+    setCorrectionDate(null);
+    setCorrectionStatuses({});
+    setCorrectionBaseline({});
+    setCorrectionError("");
+    setCorrectionPartialErrors([]);
+  };
+
+  const changedEntries = selectedList && correctionDate
+    ? selectedList.students
+      .filter((student) => correctionStatuses[student.studentId] && correctionStatuses[student.studentId] !== correctionBaseline[student.studentId])
+      .map((student) => ({
+        studentId: student.studentId,
+        name: student.name,
+        previous: correctionBaseline[student.studentId],
+        next: correctionStatuses[student.studentId],
+      }))
+    : [];
+
+  const saveCorrection = () => {
+    if (!selectedList || !correctionDate || !changedEntries.length || isPending) return;
+    const summary = changedEntries
+      .map((entry) => `${entry.name}: ${entry.previous} pasa a ${entry.next}`)
+      .join("\n");
+    requestConfirmation({
+      title: "Corregir asistencia oficial",
+      message: `${summary}\n\nLa corrección quedará registrada con tu nombre y la fecha actual. ¿Deseas continuar?`,
+      confirmLabel: "Sí, guardar corrección",
+      tone: "danger",
+    }, () => {
+      startTransition(async () => {
+        const result = await correctOfficialAttendanceAction({
+          listId: selectedList.id,
+          date: correctionDate,
+          entries: changedEntries.map((entry) => ({ studentId: entry.studentId, status: entry.next })),
+        });
+        if (!result.ok) {
+          setCorrectionError(result.error);
+          setCorrectionPartialErrors(result.errors);
+          return;
+        }
+        replaceOfficialLists(officialLists.map((list) => list.id === result.officialAttendanceList.id ? result.officialAttendanceList : list));
+        setCorrectionPartialErrors(result.errors);
+        setCorrectionDate(null);
+        setCorrectionStatuses({});
+        setCorrectionBaseline({});
+        router.refresh();
+      });
+    });
+  };
+
   return (
     <>
+      {confirmationDialog}
       <div className="page-intro official-archive-intro">
         <div><p className="eyebrow">DOCUMENTACIÓN OFICIAL</p><h1>Listas oficiales</h1><p>Consulta por grupo las listas cerradas por el docente y listas para impresión.</p></div>
         {selectedList && <OfficialListDownloadButton list={selectedList} />}
@@ -2236,9 +2334,73 @@ function OfficialListsArchive({ officialLists, groups }: { officialLists: Offici
         <label>Mes<select value={month} onChange={(event) => setMonth(event.target.value)} disabled={!groupLists.length}>{groupLists.map((list) => <option key={list.id} value={list.month}>{formatOfficialMonth(list.month)}</option>)}</select></label>
         <div><small>DOCENTE QUE OFICIALIZÓ</small><strong>{selectedList?.teacher || "Sin lista oficial"}</strong></div>
       </section>
+      {selectedList && canCorrect && selectedList.officialDates.length > 0 && (
+        <section className="panel official-list-controls">
+          <div style={{ gridColumn: "1 / -1" }}>
+            <small>CORREGIR ASISTENCIA POR FECHA</small>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+              {selectedList.officialDates.map((date) => (
+                <button key={date} type="button" className="secondary-button" onClick={() => openCorrection(date)} disabled={isPending}>
+                  <Icon name="calendar" size={16} /> {formatDate(date)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
       {selectedList
         ? <OfficialAttendanceSheet list={selectedList} />
         : <section className="panel empty-state"><Icon name="calendar" /><strong>Sin listas oficializadas</strong><p>El grupo seleccionado aún no tiene pases de lista cerrados.</p></section>}
+      {correctionDate && selectedList && (
+        <div className="catalog-edit-backdrop" role="presentation" onMouseDown={() => !isPending && closeCorrection()}>
+          <section className="panel management-form catalog-edit-form" role="dialog" aria-modal="true" aria-labelledby="correction-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="panel-head">
+              <div><p className="eyebrow">CORREGIR ASISTENCIA OFICIAL</p><h2 id="correction-title">{selectedList.group} · {formatDate(correctionDate)}</h2></div>
+              <button type="button" className="delete-button" onClick={closeCorrection} disabled={isPending} aria-label="Cerrar corrección"><Icon name="close" size={16} /></button>
+            </div>
+            {correctionError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo corregir</strong><p>{correctionError}</p></div></div>}
+            {correctionPartialErrors.length > 0 && <div className="notice notice-error"><Icon name="alert" /><div><strong>Errores parciales</strong>{correctionPartialErrors.map((message) => <p key={message}>{message}</p>)}</div></div>}
+            {correctionLoading ? (
+              <div className="empty-state"><Icon name="clock" /><strong>Cargando asistencia…</strong><p>Consultando los registros actuales.</p></div>
+            ) : (
+              <div className="attendance-table">
+                <div className="attendance-head"><span>N.º · Alumno</span><span>Estado de asistencia</span></div>
+                {selectedList.students.map((student) => {
+                  const current = correctionStatuses[student.studentId] || "Presente";
+                  const changed = current !== correctionBaseline[student.studentId];
+                  return (
+                    <div className="attendance-row" key={student.studentId} style={changed ? { background: "rgba(255, 196, 0, 0.12)" } : undefined}>
+                      <div><span className="list-number-chip">{student.listNumber}</span><strong>{student.name}</strong></div>
+                      <div className="status-toggle">
+                        {(["Presente", "Retardo", "Falta"] as Status[]).map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            disabled={isPending}
+                            className={current === status ? `selected ${status.toLowerCase()}` : ""}
+                            onClick={() => setCorrectionStatuses((old) => ({ ...old, [student.studentId]: status }))}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="roll-footer">
+              <p><Icon name="alert" size={18} /> La corrección queda registrada con tu nombre y la fecha actual.</p>
+              <div>
+                <button className="secondary-button" type="button" onClick={closeCorrection} disabled={isPending}>Cancelar</button>
+                <button className="primary-button" type="button" onClick={saveCorrection} disabled={isPending || correctionLoading || changedEntries.length === 0}>
+                  <Icon name="check" size={17} /> {isPending ? "Guardando…" : "Guardar corrección"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
