@@ -1078,11 +1078,36 @@ export async function deleteGroupAction(
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
   try {
     const payload = await getPayload({ config })
-    await payload.delete({ collection: "groups", id, overrideAccess: false, user })
+    const numericId = Number(id)
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      return { ok: false, error: "Identificador inválido." }
+    }
+    const groupStudents = await payload.find({
+      collection: "students",
+      where: { group: { equals: numericId } },
+      limit: 1000,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    })
+    const studentCount = groupStudents.totalDocs ?? groupStudents.docs.length
+    if (studentCount > 0) {
+      return {
+        ok: false,
+        error: `El grupo tiene ${studentCount} ${studentCount === 1 ? "alumno" : "alumnos"}. Muévelos o elimínalos antes.`,
+      }
+    }
+    await payload.delete({ collection: "groups", id: numericId, overrideAccess: false, user })
     return { ok: true }
   } catch (error: any) {
-    console.error("DELETE GROUP ERROR", error?.message)
-    return { ok: false, error: "No fue posible eliminar el grupo." }
+    console.error(
+      "DELETE GROUP ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return {
+      ok: false,
+      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible eliminar el grupo.",
+    }
   }
 }
 
@@ -1603,18 +1628,39 @@ export async function deleteTeacherAction(
   }
   try {
     const payload = await getPayload({ config })
+    const numericTeacherId = Number(teacherId)
+    if (!Number.isInteger(numericTeacherId) || numericTeacherId <= 0) {
+      return { ok: false, error: "El docente seleccionado no es válido." }
+    }
+    const assignedGroups = await payload.find({
+      collection: "groups",
+      where: { teacher: { equals: numericTeacherId } },
+      limit: 1,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    })
+    if ((assignedGroups.totalDocs ?? assignedGroups.docs.length) > 0) {
+      return {
+        ok: false,
+        error: "El docente tiene grupos asignados. Reasígnalos antes de eliminarlo.",
+      }
+    }
     await payload.delete({
       collection: "users",
-      id: teacherId as any,
+      id: numericTeacherId,
       overrideAccess: false,
       user,
     } as any)
     return { ok: true }
   } catch (error: any) {
-    console.error("ERROR REAL AL ELIMINAR DOCENTE:", error)
+    console.error(
+      "ERROR REAL AL ELIMINAR DOCENTE:",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
     return {
       ok: false,
-      error: error?.message || "No fue posible eliminar al docente.",
+      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible eliminar al docente.",
     }
   }
 }
