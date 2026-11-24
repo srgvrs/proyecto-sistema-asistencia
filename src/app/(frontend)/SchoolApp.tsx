@@ -849,18 +849,16 @@ function VisitorRegistry({
     startTransition(async () => {
       const result = await createVisitorAction({
         name: name.trim(),
+        identification: identification.trim(),
         reason: reason.trim(),
+        host: host.trim(),
         entryTime,
       });
       if (!result.ok) {
         setNotice(result.error);
         return;
       }
-      setVisitors((current) => [{
-        ...result.visitor,
-        identification: identification.trim(),
-        host: host.trim(),
-      }, ...current]);
+      setVisitors((current) => [result.visitor, ...current]);
       setName("");
       setIdentification("");
       setReason("");

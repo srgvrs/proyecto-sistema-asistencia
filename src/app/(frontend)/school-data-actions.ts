@@ -81,7 +81,9 @@ type AttendanceDoc = {
 type VisitorDoc = {
   id: number
   name: string
+  identification: string
   reason: string
+  host: string
   entryTime: string
   exitTime?: string | null
   registeredBy: number | { id: number }
@@ -190,9 +192,9 @@ const mapAttendanceDoc = (doc: AttendanceDoc): AttendanceRecord => ({
 const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
   id: String(doc.id),
   name: doc.name,
-  identification: "",
+  identification: doc.identification,
   reason: doc.reason,
-  host: "",
+  host: doc.host,
   date: toISODate(doc.entryTime),
   entryTime: toHHMM(doc.entryTime),
   exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
@@ -953,7 +955,9 @@ export async function deleteAttendanceAction(
 
 type VisitorInput = {
   name: string
+  identification: string
   reason: string
+  host: string
   entryTime: string
   exitTime?: string | null
 }
@@ -965,7 +969,17 @@ export async function createVisitorAction(
   if (!user || (user.role !== "Directivo" && user.role !== "Vigilante de Acceso")) {
     return { ok: false, error: "No tienes permiso para registrar visitantes." }
   }
-  if (!isString(input.name) || !isString(input.reason) || !isISODateTime(input.entryTime)) {
+  if (
+    !isString(input.name) ||
+    !input.name.trim() ||
+    !isString(input.identification) ||
+    !input.identification.trim() ||
+    !isString(input.reason) ||
+    !input.reason.trim() ||
+    !isString(input.host) ||
+    !input.host.trim() ||
+    !isISODateTime(input.entryTime)
+  ) {
     return { ok: false, error: "Los datos del visitante no son válidos." }
   }
   try {
@@ -974,7 +988,9 @@ export async function createVisitorAction(
       collection: "visitors",
       data: {
         name: input.name.trim(),
+        identification: input.identification.trim(),
         reason: input.reason.trim(),
+        host: input.host.trim(),
         entryTime: input.entryTime,
         exitTime: input.exitTime || null,
         registeredBy: user.id,
@@ -999,7 +1015,9 @@ export async function updateVisitorAction(
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
   const data: Record<string, unknown> = {}
   if (isString(input.name)) data.name = input.name.trim()
+  if (isString(input.identification)) data.identification = input.identification.trim()
   if (isString(input.reason)) data.reason = input.reason.trim()
+  if (isString(input.host)) data.host = input.host.trim()
   if (isISODateTime(input.entryTime)) data.entryTime = input.entryTime
   if (input.exitTime !== undefined) data.exitTime = input.exitTime || null
   if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }

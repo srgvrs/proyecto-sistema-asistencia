@@ -11,7 +11,7 @@ Sistema web para registrar y consultar la asistencia de alumnos y docentes, el a
 - **Listas oficiales:** consulta de listas cerradas por grupo y mes.
 - **Gestión de docentes:** asignación de grupos, baja temporal y justificación de ausencias por día.
 - **Asistencia docente:** registro de entrada y salida.
-- **Visitantes:** registro de entrada y salida con motivo y a quién visitan.
+- **Visitantes:** registro de identificación presentada, motivo, persona o área que visitan y horas de entrada y salida.
 - **Reportes:** consulta de asistencia y plantillas de reporte.
 - **Usuarios y accesos:** cuentas para cada rol, administradas por el directivo.
 

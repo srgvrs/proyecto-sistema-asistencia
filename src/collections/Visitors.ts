@@ -30,7 +30,7 @@ export const Visitors: CollectionConfig = {
   admin: {
     group: "Control escolar",
     useAsTitle: "name",
-    defaultColumns: ["name", "reason", "entryTime", "exitTime"],
+    defaultColumns: ["name", "identification", "reason", "host", "entryTime", "exitTime"],
   },
   access: {
     read: readVisitors,
@@ -46,10 +46,24 @@ export const Visitors: CollectionConfig = {
       required: true,
     },
     {
+      name: "identification",
+      label: "Identificación presentada",
+      type: "text",
+      required: true,
+      defaultValue: "",
+    },
+    {
       name: "reason",
       label: "Motivo",
       type: "text",
       required: true,
+    },
+    {
+      name: "host",
+      label: "Persona o área que visita",
+      type: "text",
+      required: true,
+      defaultValue: "",
     },
     {
       name: "entryTime",

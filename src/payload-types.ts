@@ -516,7 +516,9 @@ export interface Attendance {
 export interface Visitor {
   id: number;
   name: string;
+  identification: string;
   reason: string;
+  host: string;
   entryTime: string;
   exitTime?: string | null;
   registeredBy: number | User;
@@ -1015,7 +1017,9 @@ export interface AttendanceSelect<T extends boolean = true> {
  */
 export interface VisitorsSelect<T extends boolean = true> {
   name?: T;
+  identification?: T;
   reason?: T;
+  host?: T;
   entryTime?: T;
   exitTime?: T;
   registeredBy?: T;
