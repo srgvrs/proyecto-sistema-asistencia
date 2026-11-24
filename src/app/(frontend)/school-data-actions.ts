@@ -1000,8 +1000,18 @@ export async function updateGroupAction(
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
   const data: Record<string, unknown> = {}
-  if (isString(input.name)) data.name = input.name.trim()
-  if (Number.isInteger(input.grade)) data.grade = input.grade
+  if (input.name !== undefined) {
+    if (!isString(input.name) || !input.name.trim()) {
+      return { ok: false, error: "El nombre del grupo no es válido." }
+    }
+    data.name = input.name.trim()
+  }
+  if (input.grade !== undefined) {
+    if (!Number.isInteger(input.grade) || input.grade < 1 || input.grade > 6) {
+      return { ok: false, error: "El grado debe ser un número entero entre 1 y 6." }
+    }
+    data.grade = input.grade
+  }
   if (input.teacherId !== undefined) data.teacher = input.teacherId ? Number(input.teacherId) : null
   if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
   try {
@@ -1015,7 +1025,8 @@ export async function updateGroupAction(
     })
     const group = doc as GroupDoc
     return { ok: true, group: { id: String(group.id), name: group.name, grade: group.grade } }
-  } catch {
+  } catch (error: any) {
+    console.error("UPDATE GROUP ERROR", error?.message)
     return { ok: false, error: "No fue posible actualizar el grupo." }
   }
 }
@@ -1032,7 +1043,8 @@ export async function deleteGroupAction(
     const payload = await getPayload({ config })
     await payload.delete({ collection: "groups", id, overrideAccess: false, user })
     return { ok: true }
-  } catch {
+  } catch (error: any) {
+    console.error("DELETE GROUP ERROR", error?.message)
     return { ok: false, error: "No fue posible eliminar el grupo." }
   }
 }
@@ -1184,7 +1196,8 @@ export async function deleteAttendanceAction(
     const payload = await getPayload({ config })
     await payload.delete({ collection: "attendance", id, overrideAccess: false, user })
     return { ok: true }
-  } catch {
+  } catch (error: any) {
+    console.error("DELETE ATTENDANCE ERROR", error?.message)
     return { ok: false, error: "No fue posible eliminar la asistencia." }
   }
 }
@@ -1221,7 +1234,8 @@ export async function createVisitorAction(
       user,
     })
     return { ok: true, visitor: mapVisitorDoc(doc as VisitorDoc) }
-  } catch {
+  } catch (error: any) {
+    console.error("CREATE VISITOR ERROR", error?.message)
     return { ok: false, error: "No fue posible registrar al visitante." }
   }
 }
@@ -1284,7 +1298,8 @@ export async function deleteVisitorAction(
     const payload = await getPayload({ config })
     await payload.delete({ collection: "visitors", id, overrideAccess: false, user })
     return { ok: true }
-  } catch {
+  } catch (error: any) {
+    console.error("DELETE VISITOR ERROR", error?.message)
     return { ok: false, error: "No fue posible eliminar al visitante." }
   }
 }
@@ -1333,7 +1348,8 @@ export async function createTeacherAttendanceAction(
         exitTime: created.exitTime ? toHHMM(created.exitTime) : null,
       },
     }
-  } catch {
+  } catch (error: any) {
+    console.error("CREATE TEACHER ATTENDANCE ERROR", error?.message)
     return { ok: false, error: "No fue posible registrar la asistencia docente." }
   }
 }
@@ -1426,7 +1442,8 @@ export async function createTeacherJustificationAction(
       user,
     })
     return { ok: true }
-  } catch {
+  } catch (error: any) {
+    console.error("CREATE TEACHER JUSTIFICATION ERROR", error?.message)
     return { ok: false, error: "No fue posible registrar el justificante." }
   }
 }
@@ -1460,7 +1477,8 @@ export async function deleteTeacherJustificationAction(
     if (!doc) return { ok: false, error: "El justificante no existe." }
     await payload.delete({ collection: "teacher-justifications", id: doc.id, overrideAccess: false, user })
     return { ok: true }
-  } catch {
+  } catch (error: any) {
+    console.error("DELETE TEACHER JUSTIFICATION ERROR", error?.message)
     return { ok: false, error: "No fue posible eliminar el justificante." }
   }
 }
@@ -1585,7 +1603,8 @@ export async function updateTeacherEmploymentStatusAction(
       user,
     })
     return { ok: true }
-  } catch {
+  } catch (error: any) {
+    console.error("UPDATE TEACHER EMPLOYMENT STATUS ERROR", error?.message)
     return { ok: false, error: "No fue posible actualizar el estado del docente." }
   }
 }
