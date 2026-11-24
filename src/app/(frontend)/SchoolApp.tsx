@@ -434,7 +434,7 @@ function App({
               groups={groups.filter((group) => (teacherGroups[session.name] || []).includes(group.name))}
               setStudents={setStudents}
               onDeleteRecords={(studentId) => setRecords((current) => current.filter((record) => record.studentId !== studentId))}
-              canDelete={false}
+              canDelete={true}
             />
           )}
           {view === "docentes" && session.role === "Docente" && (
