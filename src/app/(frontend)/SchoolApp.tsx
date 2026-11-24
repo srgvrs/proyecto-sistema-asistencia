@@ -89,6 +89,15 @@ const formatDate = (date: string) =>
     new Date(`${date}T12:00:00Z`),
   );
 
+const getCycleLabel = (date: string): string => {
+  const [yearText, monthText] = date.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return "";
+  const startYear = month >= 9 ? year : year - 1;
+  return `${startYear}–${startYear + 1}`;
+};
+
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const common = {
     width: size,
@@ -572,7 +581,7 @@ function Dashboard({ userName, role, records, students, visitors, assignedGroups
   return (
     <>
       <div className="page-intro">
-        <div><p className="eyebrow">CICLO ESCOLAR 2026–2027</p><h1>Buenos días, {userName}</h1><p>{role === "Docente" ? `Este es el estado de asistencia de tus grupos al ${formatDate(currentDate)}.` : `Este es el estado de asistencia del plantel al ${formatDate(currentDate)}.`}</p></div>
+        <div><p className="eyebrow">CICLO ESCOLAR {getCycleLabel(currentDate)}</p><h1>Buenos días, {userName}</h1><p>{role === "Docente" ? `Este es el estado de asistencia de tus grupos al ${formatDate(currentDate)}.` : `Este es el estado de asistencia del plantel al ${formatDate(currentDate)}.`}</p></div>
         <div className="date-pill"><Icon name="calendar" size={18} /> {formatDate(currentDate)}</div>
       </div>
       <div className="metrics">
@@ -2051,7 +2060,7 @@ async function generateOfficialAttendancePdf(list: OfficialAttendanceList) {
   drawCentered('ESCUELA PRIMARIA "VICENTE SUÁREZ"', 728, 7, true);
   drawCentered("ZONA ESCOLAR: 069     SECTOR: 13", 717, 7);
   drawCentered("CLAVE: 17DPR0623B", 706, 7);
-  drawCentered("CICLO ESCOLAR 2026 - 2027", 695, 7, true);
+  drawCentered(`CICLO ESCOLAR ${getCycleLabel(list.month).replace("–", " - ")}`, 695, 7, true);
 
   const [grade = "", groupLetter = ""] = list.group.split(/\s+/);
   drawCentered(`GRADO: ${grade}     GRUPO: "${groupLetter}"`, 673, 8, true);
@@ -2178,7 +2187,7 @@ function OfficialAttendanceSheet({ list }: { list: OfficialAttendanceList }) {
           <span>ESCUELA PRIMARIA “VICENTE SUÁREZ”</span>
           <span>ZONA ESCOLAR: 069 &nbsp;&nbsp; SECTOR: 13</span>
           <span>CLAVE: 17DPR0623B</span>
-          <span>CICLO ESCOLAR 2026–2027</span>
+          <span>CICLO ESCOLAR {getCycleLabel(list.month)}</span>
         </div>
         <Image src={schoolLogo} alt="Escudo de la Escuela Primaria Vicente Suárez" width={76} height={76} unoptimized />
       </header>
