@@ -16,6 +16,30 @@ import type {
 } from "@/lib/school-data-types"
 
 const isString = (value: unknown): value is string => typeof value === "string"
+
+const MAX_NAME_LENGTH = 60
+
+const normalizePersonName = (value: string): string =>
+  value.trim().replace(/\s+/g, " ")
+
+const validatePersonName = (
+  value: unknown,
+  label: string,
+  required: boolean,
+): { ok: true; value: string } | { ok: false; error: string } => {
+  if (!isString(value)) {
+    return { ok: false, error: `${label} no es válido.` }
+  }
+  const normalized = normalizePersonName(value)
+  if (!normalized) {
+    if (required) return { ok: false, error: `${label} es obligatorio.` }
+    return { ok: true, value: "" }
+  }
+  if (normalized.length > MAX_NAME_LENGTH) {
+    return { ok: false, error: `${label} no puede exceder ${MAX_NAME_LENGTH} caracteres.` }
+  }
+  return { ok: true, value: normalized }
+}
 const isListNumber = (value: unknown): value is number =>
   Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 999
 const isISODate = (value: unknown): value is string => {
@@ -715,12 +739,15 @@ export async function createStudentAction(
   if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para crear alumnos." }
   }
-  if (!isString(input.firstName) || !isString(input.paternalSurname) || !isString(input.matricula) || !isString(input.groupId)) {
+  if (!isString(input.matricula) || !isString(input.groupId)) {
     return { ok: false, error: "Los datos del alumno no son válidos." }
   }
-  if (input.maternalSurname !== undefined && !isString(input.maternalSurname)) {
-    return { ok: false, error: "Los datos del alumno no son válidos." }
-  }
+  const firstNameResult = validatePersonName(input.firstName, "El nombre", true)
+  if (!firstNameResult.ok) return firstNameResult
+  const paternalSurnameResult = validatePersonName(input.paternalSurname, "El apellido paterno", true)
+  if (!paternalSurnameResult.ok) return paternalSurnameResult
+  const maternalSurnameResult = validatePersonName(input.maternalSurname ?? "", "El apellido materno", false)
+  if (!maternalSurnameResult.ok) return maternalSurnameResult
   if (input.lastName !== undefined && !isString(input.lastName)) {
     return { ok: false, error: "Los datos del alumno no son válidos." }
   }
@@ -767,13 +794,14 @@ export async function createStudentAction(
     const matricula = requestedNumber > 0
       ? input.matricula.trim()
       : `${input.matricula.trim().replace(/-\d+$/, "")}-${listNumber}`
-    const paternalSurname = input.paternalSurname.trim()
-    const maternalSurname = (input.maternalSurname ?? "").trim()
-    const lastName = (input.lastName ?? "").trim() || `${paternalSurname} ${maternalSurname}`.trim()
+    const firstName = firstNameResult.value
+    const paternalSurname = paternalSurnameResult.value
+    const maternalSurname = maternalSurnameResult.value
+    const lastName = normalizePersonName(input.lastName ?? "") || `${paternalSurname} ${maternalSurname}`.trim()
     const doc = await payload.create({
       collection: "students",
       data: {
-        firstName: input.firstName.trim(),
+        firstName,
         paternalSurname,
         maternalSurname: maternalSurname || undefined,
         lastName,
@@ -837,28 +865,25 @@ export async function updateStudentAction(
   }
   const data: Record<string, string | number> = {}
   if (input.firstName !== undefined) {
-    if (!isString(input.firstName) || !input.firstName.trim()) {
-      return { ok: false, error: "El nombre del alumno no es válido." }
-    }
-    data.firstName = input.firstName.trim()
+    const result = validatePersonName(input.firstName, "El nombre", true)
+    if (!result.ok) return result
+    data.firstName = result.value
   }
   if (input.paternalSurname !== undefined) {
-    if (!isString(input.paternalSurname) || !input.paternalSurname.trim()) {
-      return { ok: false, error: "El apellido paterno no es válido." }
-    }
-    data.paternalSurname = input.paternalSurname.trim()
+    const result = validatePersonName(input.paternalSurname, "El apellido paterno", true)
+    if (!result.ok) return result
+    data.paternalSurname = result.value
   }
   if (input.maternalSurname !== undefined) {
-    if (!isString(input.maternalSurname)) {
-      return { ok: false, error: "El apellido materno no es válido." }
-    }
-    data.maternalSurname = input.maternalSurname.trim()
+    const result = validatePersonName(input.maternalSurname, "El apellido materno", false)
+    if (!result.ok) return result
+    data.maternalSurname = result.value
   }
   if (input.lastName !== undefined) {
     if (!isString(input.lastName)) {
       return { ok: false, error: "Los apellidos no son válidos." }
     }
-    data.lastName = input.lastName.trim()
+    data.lastName = normalizePersonName(input.lastName)
   }
   let nextGroupId: number | null = null
   if (input.groupId !== undefined) {

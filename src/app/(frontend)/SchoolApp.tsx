@@ -2454,6 +2454,11 @@ const replaceReportPlaceholders = (value: string, row: ReportRow | null, total: 
   return Object.entries(replacements).reduce((result, [marker, replacement]) => result.replaceAll(marker, replacement), value);
 };
 
+const sanitizeCsvCell = (value: string | number): string => {
+  const text = String(value);
+  return /^[=+\-@]/.test(text) ? `'${text}` : text;
+};
+
 const downloadBlob = (blob: Blob, filename: string) => {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -2696,7 +2701,7 @@ function LegacyReports({ records, students, allowedGroups, initialTemplates }: {
   ), [records, visibleStudents, studentFilter, groupFilter, statusFilter]);
 
   const exportCSV = () => {
-    const csv = ["Alumno,Grupo,Puntual,Retardos,Faltas", ...reportRows.map((r) => `"${r.name}",${r.group},${r.present},${r.late},${r.absent}`)].join("\n");
+    const csv = ["Alumno,Grupo,Puntual,Retardos,Faltas", ...reportRows.map((r) => `"${sanitizeCsvCell(r.name)}",${sanitizeCsvCell(r.group)},${r.present},${r.late},${r.absent}`)].join("\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
     link.download = "reporte-asistencia.csv";
@@ -2907,7 +2912,7 @@ function Reports({
   };
 
   const exportCSV = () => {
-    const escapeCell = (value: string | number) => `"${String(value).replaceAll("\"", "\"\"")}"`;
+    const escapeCell = (value: string | number) => `"${sanitizeCsvCell(value).replaceAll("\"", "\"\"")}"`;
     const teacher = responsibleTeachers.join(" / ") || "Sin docente asignado";
     const csvRows = displayedRows.map((row) => [
       periodRange.label,
