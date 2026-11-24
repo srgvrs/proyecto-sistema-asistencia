@@ -997,11 +997,7 @@ function StudentManagement({
       return;
     }
     const studentName = formatStudentName(paternalSurname, maternalSurname, givenNames);
-    requestConfirmation({
-      title: "Agregar alumno",
-      message: `Se va a agregar a ${studentName} al grupo ${group}. La matrícula se asignará automáticamente. ¿Deseas continuar?`,
-      confirmLabel: "Sí, agregar alumno",
-    }, () => {
+    const submitStudent = (confirmDuplicate: boolean) => {
       setNotice(null);
       startTransition(async () => {
         const result = await createStudentAction({
@@ -1010,8 +1006,18 @@ function StudentManagement({
           maternalSurname: maternalSurname.trim(),
           matricula: "",
           groupId: groupDoc.id,
+          confirmDuplicate,
         });
         if (!result.ok) {
+          if (result.code === "DUPLICATE_NAME") {
+            requestConfirmation({
+              title: "Alumno duplicado",
+              message: `Ya existe un alumno llamado ${studentName} en el grupo ${group}. ¿Agregar de todos modos?`,
+              confirmLabel: "Sí, agregar de todos modos",
+              tone: "danger",
+            }, () => submitStudent(true));
+            return;
+          }
           setNotice({ type: "error", text: result.error });
           return;
         }
@@ -1021,7 +1027,12 @@ function StudentManagement({
         setMaternalSurname("");
         setNotice({ type: "success", text: "El alumno fue agregado correctamente a la lista." });
       });
-    });
+    };
+    requestConfirmation({
+      title: "Agregar alumno",
+      message: `Se va a agregar a ${studentName} al grupo ${group}. La matrícula se asignará automáticamente. ¿Deseas continuar?`,
+      confirmLabel: "Sí, agregar alumno",
+    }, () => submitStudent(false));
   };
 
   const deleteStudent = (student: Student) => {
@@ -1174,11 +1185,7 @@ function GroupStudentManagement({
       return;
     }
     const studentName = formatStudentName(paternalSurname, maternalSurname, givenNames);
-    requestConfirmation({
-      title: "Agregar alumno",
-      message: `Se va a agregar a ${studentName} al grupo ${groupDoc.name}. La matrícula se asignará automáticamente. ¿Deseas continuar?`,
-      confirmLabel: "Sí, agregar alumno",
-    }, () => {
+    const submitStudent = (confirmDuplicate: boolean) => {
       setNotice(null);
       startTransition(async () => {
         const result = await createStudentAction({
@@ -1187,8 +1194,18 @@ function GroupStudentManagement({
           maternalSurname: maternalSurname.trim(),
           matricula: "",
           groupId: groupDoc.id,
+          confirmDuplicate,
         });
         if (!result.ok) {
+          if (result.code === "DUPLICATE_NAME") {
+            requestConfirmation({
+              title: "Alumno duplicado",
+              message: `Ya existe un alumno llamado ${studentName} en el grupo ${groupDoc.name}. ¿Agregar de todos modos?`,
+              confirmLabel: "Sí, agregar de todos modos",
+              tone: "danger",
+            }, () => submitStudent(true));
+            return;
+          }
           setNotice({ type: "error", text: result.error });
           return;
         }
@@ -1198,7 +1215,12 @@ function GroupStudentManagement({
         setMaternalSurname("");
         setNotice({ type: "success", text: `El alumno fue agregado correctamente a ${groupDoc.name}.` });
       });
-    });
+    };
+    requestConfirmation({
+      title: "Agregar alumno",
+      message: `Se va a agregar a ${studentName} al grupo ${groupDoc.name}. La matrícula se asignará automáticamente. ¿Deseas continuar?`,
+      confirmLabel: "Sí, agregar alumno",
+    }, () => submitStudent(false));
   };
 
   const performDeleteStudent = (student: Student) => {
@@ -1291,7 +1313,7 @@ function GroupStudentManagement({
       return;
     }
 
-    const applyChanges = () => {
+    const applyChanges = (confirmDuplicate: boolean) => {
       setNotice(null);
       startTransition(async () => {
         const result = await updateStudentAction(student.id, {
@@ -1299,8 +1321,18 @@ function GroupStudentManagement({
           paternalSurname: nextPaternalSurname,
           maternalSurname: nextMaternalSurname,
           groupId: nextGroup.id,
+          confirmDuplicate,
         });
         if (!result.ok) {
+          if (result.code === "DUPLICATE_NAME") {
+            requestConfirmation({
+              title: "Alumno duplicado",
+              message: `Ya existe un alumno llamado ${nextName} en el grupo ${nextGroup.name}. ¿Guardar de todos modos?`,
+              confirmLabel: "Sí, guardar de todos modos",
+              tone: "danger",
+            }, () => applyChanges(true));
+            return;
+          }
           setNotice({ type: "error", text: result.error });
           return;
         }
@@ -1327,7 +1359,7 @@ function GroupStudentManagement({
           title: "Guardar cambios del alumno",
           message: summary,
           confirmLabel: "Sí, guardar cambios",
-        }, applyChanges);
+        }, () => applyChanges(false));
       });
       return;
     }
@@ -1336,7 +1368,7 @@ function GroupStudentManagement({
       title: "Guardar cambios del alumno",
       message: summary,
       confirmLabel: "Sí, guardar cambios",
-    }, applyChanges);
+    }, () => applyChanges(false));
   };
 
   return (

@@ -22,6 +22,49 @@ const MAX_NAME_LENGTH = 60
 const normalizePersonName = (value: string): string =>
   value.trim().replace(/\s+/g, " ")
 
+const normalizeName = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+
+const buildNormalizedNameKey = (
+  givenNames: string,
+  paternalSurname: string,
+  maternalSurname: string,
+): string =>
+  normalizeName(`${givenNames} ${paternalSurname} ${maternalSurname}`)
+
+const findDuplicateStudentInGroup = async (
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  groupId: number,
+  givenNames: string,
+  paternalSurname: string,
+  maternalSurname: string,
+  excludeId: number | null,
+  user: { id: number | string },
+): Promise<boolean> => {
+  const targetKey = buildNormalizedNameKey(givenNames, paternalSurname, maternalSurname)
+  if (!targetKey) return false
+  const result = await payload.find({
+    collection: "students",
+    where: { group: { equals: groupId } },
+    limit: 1000,
+    depth: 0,
+    overrideAccess: false,
+    user,
+  })
+  for (const doc of result.docs as StudentDoc[]) {
+    if (excludeId !== null && Number(doc.id) === excludeId) continue
+    const parts = resolveStudentNameParts(doc)
+    const key = buildNormalizedNameKey(parts.givenNames, parts.paternalSurname, parts.maternalSurname)
+    if (key === targetKey) return true
+  }
+  return false
+}
+
 const validatePersonName = (
   value: unknown,
   label: string,
@@ -787,11 +830,12 @@ type StudentInput = {
   lastName?: string
   matricula: string
   groupId: string
+  confirmDuplicate?: boolean
 }
 
 export async function createStudentAction(
   input: StudentInput,
-): Promise<{ ok: true; student: Student } | { ok: false; error: string }> {
+): Promise<{ ok: true; student: Student } | { ok: false; error: string; code?: "DUPLICATE_NAME" }> {
   const user = await appAuth.currentUser()
   if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para crear alumnos." }
@@ -843,6 +887,25 @@ export async function createStudentAction(
     const paternalSurname = paternalSurnameResult.value
     const maternalSurname = maternalSurnameResult.value
     const lastName = normalizePersonName(input.lastName ?? "") || `${paternalSurname} ${maternalSurname}`.trim()
+
+    if (input.confirmDuplicate !== true) {
+      const duplicate = await findDuplicateStudentInGroup(
+        payload,
+        groupId,
+        firstName,
+        paternalSurname,
+        maternalSurname,
+        null,
+        user,
+      )
+      if (duplicate) {
+        return {
+          ok: false,
+          code: "DUPLICATE_NAME",
+          error: "Ya existe un alumno con ese nombre en este grupo.",
+        }
+      }
+    }
 
     const baseCounter = await getGroupMatriculaCounter(payload, groupId, groupDoc.name, user)
     let attempt = 0
@@ -922,7 +985,7 @@ export async function updateStudentAction(
   input: Partial<StudentInput>,
 ): Promise<
   | { ok: true; student: Student; studentInOfficialMarks: boolean }
-  | { ok: false; error: string }
+  | { ok: false; error: string; code?: "DUPLICATE_NAME" }
 > {
   const user = await appAuth.currentUser()
   if (!user || user.role !== "Directivo") {
@@ -983,6 +1046,32 @@ export async function updateStudentAction(
 
     const currentGroupId = getRelationId(current.group)
     const groupChanged = nextGroupId !== null && String(nextGroupId) !== currentGroupId
+
+    if (input.confirmDuplicate !== true) {
+      const currentParts = resolveStudentNameParts(current)
+      const nextGivenNames = typeof data.firstName === "string" ? data.firstName : currentParts.givenNames
+      const nextPaternalSurname = typeof data.paternalSurname === "string" ? data.paternalSurname : currentParts.paternalSurname
+      const nextMaternalSurname = typeof data.maternalSurname === "string" ? data.maternalSurname : currentParts.maternalSurname
+      const targetGroupId = groupChanged ? (nextGroupId as number) : Number(currentGroupId)
+      if (Number.isInteger(targetGroupId) && targetGroupId > 0) {
+        const duplicate = await findDuplicateStudentInGroup(
+          payload,
+          targetGroupId,
+          nextGivenNames,
+          nextPaternalSurname,
+          nextMaternalSurname,
+          numericId,
+          user,
+        )
+        if (duplicate) {
+          return {
+            ok: false,
+            code: "DUPLICATE_NAME",
+            error: "Ya existe un alumno con ese nombre en este grupo.",
+          }
+        }
+      }
+    }
 
     if (groupChanged) {
       const group = await payload.findByID({
