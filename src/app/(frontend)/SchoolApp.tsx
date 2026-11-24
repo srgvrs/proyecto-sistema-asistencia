@@ -2186,7 +2186,7 @@ function RollCall({
     ? sortAndNumberGroupStudents(students, group)
     : [];
   const officialList = availableGroups.includes(group)
-    ? officialLists.find((list) => list.id === `${group}-${date.slice(0, 7)}`)
+    ? officialLists.find((list) => list.group === group && list.month === date.slice(0, 7))
     : undefined;
   const isOfficial = Boolean(officialList?.officialDates.includes(date));
   const statusFor = (student: Student): Status => draft[student.id]
@@ -2278,7 +2278,7 @@ function RollCall({
         </div>
         <div className="roll-footer">
           <p><Icon name="alert" size={18} /> Al oficializar, el pase de lista se cerrará definitivamente.</p>
-          <div><button className="secondary-button" disabled={isOfficial || isPending} onClick={saveDraft}>{isPending ? "Guardando…" : "Guardar borrador"}</button><button className="primary-button" disabled={isOfficial || isPending || !groupStudents.length} onClick={officialize}><Icon name="lock" size={17} /> {isPending ? "Procesando…" : "Oficializar lista"}</button></div>
+          <div>{!isOfficial && <button className="secondary-button" disabled={isPending} onClick={saveDraft}>{isPending ? "Guardando…" : "Guardar borrador"}</button>}<button className="primary-button" disabled={isOfficial || isPending || !groupStudents.length} onClick={officialize}><Icon name="lock" size={17} /> {isPending ? "Procesando…" : "Oficializar lista"}</button></div>
         </div>
       </section>
       {officialList && (
