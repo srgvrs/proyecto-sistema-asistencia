@@ -37,6 +37,8 @@ const buildNormalizedNameKey = (
 ): string =>
   normalizeName(`${givenNames} ${paternalSurname} ${maternalSurname}`)
 
+type ActionUser = NonNullable<Awaited<ReturnType<typeof appAuth.currentUser>>>
+
 const findDuplicateStudentInGroup = async (
   payload: Awaited<ReturnType<typeof getPayload>>,
   groupId: number,
@@ -44,7 +46,7 @@ const findDuplicateStudentInGroup = async (
   paternalSurname: string,
   maternalSurname: string,
   excludeId: number | null,
-  user: { id: number | string },
+  user: ActionUser,
 ): Promise<boolean> => {
   const targetKey = buildNormalizedNameKey(givenNames, paternalSurname, maternalSurname)
   if (!targetKey) return false

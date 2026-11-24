@@ -1301,9 +1301,8 @@ function GroupStudentManagement({
     const previousName = formatStudentName(previousParts.paternalSurname, previousParts.maternalSurname, previousParts.givenNames);
     const nextName = formatStudentName(nextPaternalSurname, nextMaternalSurname, nextGivenNames);
     const groupChanged = nextGroup.name !== student.group;
-    const consecutiveMatch = /-(\d+)$/.exec(student.matricula ?? "");
-    const consecutive = consecutiveMatch ? consecutiveMatch[1] : "";
-    const previousMatricula = student.matricula || `${student.group.replace(/\s+/g, "")}-${consecutive}`;
+    const consecutive = student.listNumber ? String(student.listNumber) : "";
+    const previousMatricula = `${student.group.replace(/\s+/g, "")}-${consecutive}`;
     const nextMatricula = consecutive
       ? `${nextGroup.name.replace(/\s+/g, "")}-${consecutive}`
       : nextGroup.name.replace(/\s+/g, "");
