@@ -622,10 +622,10 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
 .official-list-controls small { color: #7a8e86; font-size: 7px; letter-spacing: .09em; }
 .official-list-controls strong { color: #285346; margin-top: 3px; font-size: 10px; }
 .official-attendance-sheet { color: #111; background: white; border: 1px solid #cfd5d2; border-radius: 4px; padding: 20px 22px 16px; box-shadow: 0 8px 30px rgba(18,53,42,.07); overflow: hidden; }
-.official-sheet-header { display: grid; grid-template-columns: 184px 1fr 80px; align-items: center; gap: 14px; min-height: 82px; }
-.official-sheet-header > img:first-child { width: 184px; height: auto; }
-.official-sheet-header > img:last-child { width: 72px; height: 72px; object-fit: contain; justify-self: end; }
-.official-sheet-header > div { display: grid; justify-items: center; gap: 2px; text-align: center; font-family: Arial, sans-serif; font-size: 8px; line-height: 1.2; }
+.official-sheet-header { position: relative; min-height: 82px; display: flex; align-items: center; justify-content: center; }
+.official-sheet-header > img:first-child { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 184px; height: auto; }
+.official-sheet-header > img:last-child { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 72px; height: 72px; object-fit: contain; }
+.official-sheet-header > div { width: 100%; padding: 0 200px; display: grid; justify-items: center; gap: 2px; text-align: center; font-family: Arial, sans-serif; font-size: 8px; line-height: 1.2; }
 .official-sheet-header > div strong { font-size: 9px; }
 .official-sheet-title { margin: 5px 0 8px; text-align: center; font-family: Arial, sans-serif; }
 .official-sheet-title h2 { margin: 5px 0; font-size: 13px; font-weight: 800; letter-spacing: .03em; }
@@ -867,9 +867,9 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
   .catalog-edit-form .catalog-student-fields { grid-template-columns: 1fr; }
   .official-list-controls { grid-template-columns: 1fr 1fr; }
   .official-list-controls > div { grid-column: 1 / -1; justify-self: stretch; text-align: left; }
-  .official-sheet-header { grid-template-columns: 140px 1fr 58px; }
   .official-sheet-header > img:first-child { width: 140px; }
   .official-sheet-header > img:last-child { width: 54px; height: 54px; }
+  .official-sheet-header > div { padding: 0 150px; }
   .visitor-search { width: 100%; }
   .visitor-table-head { display: none; }
   .visitor-row { grid-template-columns: 1fr auto; padding: 14px 15px; }
@@ -938,8 +938,8 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
   .official-download { justify-items: stretch; }
   .official-download > small { max-width: none; text-align: left; }
   .official-attendance-sheet { padding: 12px; }
-  .official-sheet-header { grid-template-columns: 1fr 50px; }
   .official-sheet-header > img:first-child { display: none; }
+  .official-sheet-header > div { padding: 0 60px; }
 }
 
 @media print {

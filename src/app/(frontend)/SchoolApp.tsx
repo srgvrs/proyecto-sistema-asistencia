@@ -2022,10 +2022,16 @@ async function generateOfficialAttendancePdf(list: OfficialAttendanceList) {
     document.embedPng(await institutionResponse.arrayBuffer()),
     document.embedPng(await schoolResponse.arrayBuffer()),
   ]);
+  const pageWidth = 612;
+  const logoLeftEdge = 37 + 110;
+  const logoRightEdge = 524;
   const drawCentered = (text: string, y: number, size: number, bold = false) => {
     const font = bold ? boldFont : regularFont;
+    const textWidth = font.widthOfTextAtSize(text, size);
+    const centeredX = (pageWidth - textWidth) / 2;
+    const x = Math.min(Math.max(centeredX, logoLeftEdge), logoRightEdge - textWidth);
     page.drawText(text, {
-      x: (612 - font.widthOfTextAtSize(text, size)) / 2,
+      x,
       y,
       size,
       font,
