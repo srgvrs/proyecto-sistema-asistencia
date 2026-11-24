@@ -201,6 +201,7 @@ type StudentDoc = {
   maternalSurname?: string | null
   matricula: string
   group: number | { id: number; name: string }
+  status?: "Activo" | "Egresado" | null
 }
 
 type GroupDoc = {
@@ -373,6 +374,7 @@ const mapStudentDoc = (
     paternalSurname: parts.paternalSurname,
     maternalSurname: parts.maternalSurname,
     group: groupName,
+    status: doc.status === "Egresado" ? "Egresado" : "Activo",
   }
 }
 

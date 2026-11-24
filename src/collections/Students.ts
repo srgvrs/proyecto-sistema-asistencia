@@ -111,6 +111,17 @@ export const Students: CollectionConfig = {
       required: true,
       hasMany: false,
     },
+    {
+      name: "status",
+      label: "Estado",
+      type: "select",
+      defaultValue: "Activo",
+      index: true,
+      options: [
+        { label: "Activo", value: "Activo" },
+        { label: "Egresado", value: "Egresado" },
+      ],
+    },
   ],
   versions: false,
 }

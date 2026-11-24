@@ -1,5 +1,7 @@
 export type Status = "Presente" | "Retardo" | "Falta"
 
+export type StudentStatus = "Activo" | "Egresado"
+
 export type Student = {
   id: string
   name: string
@@ -8,6 +10,7 @@ export type Student = {
   paternalSurname?: string
   maternalSurname?: string
   group: string
+  status: StudentStatus
 }
 
 export type GroupRef = {
