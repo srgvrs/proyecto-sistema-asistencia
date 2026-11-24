@@ -1136,7 +1136,7 @@ export async function deleteVisitorAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await appAuth.currentUser()
   if (!user || user.role !== "Directivo") {
-    return { ok: false, error: "No tienes permiso para eliminar visitantes." }
+    return { ok: false, error: "No tienes permiso para eliminar visitas." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
   try {

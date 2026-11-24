@@ -412,6 +412,7 @@ function App({
               visitors={visitors}
               setVisitors={setVisitors}
               readOnly={session.role === "Directivo"}
+              canDelete={session.role === "Directivo"}
             />
           )}
           {view === "lista" && session.role === "Docente" && (
@@ -823,10 +824,12 @@ function VisitorRegistry({
   visitors,
   setVisitors,
   readOnly,
+  canDelete,
 }: {
   visitors: Visitor[];
   setVisitors: React.Dispatch<React.SetStateAction<Visitor[]>>;
   readOnly: boolean;
+  canDelete: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -943,7 +946,7 @@ function VisitorRegistry({
               <span>{visitor.host}</span>
               <span><strong>{visitor.entryTime}</strong><small>{formatDate(visitor.date)}</small></span>
               <span>{visitor.exitTime ? <span className="exit-time">{visitor.exitTime}</span> : readOnly ? <span className="inside-status">En plantel</span> : <button className="exit-button" onClick={() => registerExit(visitor)} disabled={isPending}>Registrar salida</button>}</span>
-              {!readOnly && visitor.exitTime && (
+              {canDelete && visitor.exitTime && (
                 <button className="delete-button" onClick={() => handleDeleteVisitor(visitor)} disabled={isPending} aria-label={`Eliminar registro de ${visitor.name}`}>
                   <Icon name="trash" size={16} />
                 </button>
