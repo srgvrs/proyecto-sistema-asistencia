@@ -3237,17 +3237,16 @@ function SchoolYearClose({
 
   useEffect(() => {
     loadPreview(new Set());
-  }, [loadPreview]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleExcluded = (studentId: string) => {
     if (executed) return;
-    setExcluded((current) => {
-      const next = new Set(current);
-      if (next.has(studentId)) next.delete(studentId);
-      else next.add(studentId);
-      loadPreview(next);
-      return next;
-    });
+    const next = new Set(excluded);
+    if (next.has(studentId)) next.delete(studentId);
+    else next.add(studentId);
+    setExcluded(next);
+    loadPreview(next);
   };
 
   const openConfirm = () => {
