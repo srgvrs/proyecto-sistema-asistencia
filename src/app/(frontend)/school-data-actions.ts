@@ -983,6 +983,7 @@ export async function createGroupAction(
     const group = doc as GroupDoc
     return { ok: true, group: { id: String(group.id), name: group.name, grade: group.grade } }
   } catch (error: any) {
+    console.error("CREATE GROUP ERROR", error?.message)
     if (/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
       return { ok: false, error: "Ese grupo ya existe." }
     }
