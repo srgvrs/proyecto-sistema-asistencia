@@ -1412,16 +1412,18 @@ function GroupStudentManagement({
       </div>
       {notice && <div className={`notice notice-${notice.type} catalog-notice`}><Icon name={notice.type === "success" ? "check" : "alert"} /><div><strong>{notice.type === "success" ? "Catálogo actualizado" : "Revisa la información"}</strong><p>{notice.text}</p></div></div>}
       {editingStudent && (
-        <form className="panel management-form catalog-edit-form" onSubmit={saveEditStudent}>
-          <div className="panel-head"><div><p className="eyebrow">EDITAR ALUMNO</p><h2>{editingStudent.name}</h2></div><button type="button" className="delete-button" onClick={closeEditStudent} aria-label="Cerrar edición"><Icon name="close" size={16} /></button></div>
-          <div className="management-fields catalog-student-fields">
-            <label>Apellido paterno<input required value={editPaternalSurname} onChange={(event) => setEditPaternalSurname(event.target.value)} /></label>
-            <label>Apellido materno<input value={editMaternalSurname} onChange={(event) => setEditMaternalSurname(event.target.value)} /></label>
-            <label>Nombre(s)<input required value={editGivenNames} onChange={(event) => setEditGivenNames(event.target.value)} /></label>
-            <label>Grupo<select required value={editGroupId} onChange={(event) => setEditGroupId(event.target.value)}>{groups.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
-            <button className="primary-button" type="submit" disabled={isPending}><Icon name="check" size={18} /> {isPending ? "Guardando…" : "Guardar cambios"}</button>
-          </div>
-        </form>
+        <div className="catalog-edit-backdrop" role="presentation" onMouseDown={() => !isPending && closeEditStudent()}>
+          <form className="panel management-form catalog-edit-form" onSubmit={saveEditStudent} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="catalog-edit-title">
+            <div className="panel-head"><div><p className="eyebrow">EDITAR ALUMNO</p><h2 id="catalog-edit-title">{editingStudent.name}</h2></div><button type="button" className="delete-button" onClick={closeEditStudent} disabled={isPending} aria-label="Cerrar edición"><Icon name="close" size={16} /></button></div>
+            <div className="management-fields catalog-student-fields">
+              <label>Apellido paterno<input required value={editPaternalSurname} onChange={(event) => setEditPaternalSurname(event.target.value)} /></label>
+              <label>Apellido materno<input value={editMaternalSurname} onChange={(event) => setEditMaternalSurname(event.target.value)} /></label>
+              <label>Nombre(s)<input required value={editGivenNames} onChange={(event) => setEditGivenNames(event.target.value)} /></label>
+              <label>Grupo<select required value={editGroupId} onChange={(event) => setEditGroupId(event.target.value)}>{groups.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+              <button className="primary-button" type="submit" disabled={isPending}><Icon name="check" size={18} /> {isPending ? "Guardando…" : "Guardar cambios"}</button>
+            </div>
+          </form>
+        </div>
       )}
       <div className="catalog-forms">
         <form className="panel management-form" onSubmit={addGroup}>
@@ -1463,8 +1465,8 @@ function GroupStudentManagement({
             <span className="group-badge">{student.group}</span>
             <span className="teacher-badge">{teacherNameForGroup(groups.find((group) => group.name === student.group)?.id ?? "")}</span>
             <div className="student-row-actions">
-              <button className="secondary-button" onClick={() => openEditStudent(student)} disabled={isPending} aria-label={`Editar a ${student.name}`}><Icon name="plus" size={16} /> Editar</button>
-              {canDelete && <button className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
+              <button type="button" className="secondary-button" onClick={() => openEditStudent(student)} disabled={isPending} aria-label={`Editar a ${student.name}`}><Icon name="plus" size={16} /> Editar</button>
+              {canDelete && <button type="button" className="delete-button" onClick={() => deleteStudent(student)} disabled={isPending} aria-label={`Eliminar a ${student.name}`}><Icon name="trash" size={16} /> Eliminar</button>}
             </div>
           </div>)}
           {visibleStudents.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos</strong><p>No hay alumnos que coincidan con los filtros seleccionados.</p></div>}
