@@ -89,31 +89,25 @@ const isStudentInOfficialMarks = async (
   return false
 }
 
-const isDateOfficialized = async (
+const isStudentDateOfficialized = async (
   payload: Awaited<ReturnType<typeof getPayload>>,
-  groupId: number | string,
+  studentId: number | string,
   date: string,
 ): Promise<boolean> => {
   const month = date.slice(0, 7)
   const result = await payload.find({
     collection: "official-lists",
-    where: {
-      and: [
-        { group: { equals: groupId } },
-        { title: { contains: month } },
-      ],
-    },
-    limit: 50,
+    where: { title: { contains: month } },
+    limit: 200,
     depth: 0,
     overrideAccess: true,
   })
   for (const doc of result.docs as OfficialListDoc[]) {
     const marks = doc.marks
     if (!marks || typeof marks !== "object" || Array.isArray(marks)) continue
-    for (const studentMarks of Object.values(marks)) {
-      if (studentMarks && typeof studentMarks === "object" && date in studentMarks) {
-        return true
-      }
+    const studentMarks = (marks as Record<string, Record<string, "." | "X">>)[String(studentId)]
+    if (studentMarks && typeof studentMarks === "object" && date in studentMarks) {
+      return true
     }
   }
   return false
@@ -390,9 +384,6 @@ export async function officializeAttendanceAction(
     if (!groupDoc) return { ok: false, error: "El grupo no existe." }
     if (getRelationId(groupDoc.teacher) !== String(user.id)) {
       return { ok: false, error: "El grupo no está asignado a tu cuenta docente." }
-    }
-    if (await isDateOfficialized(payload, groupDoc.id, input.date)) {
-      return { ok: false, error: "La lista ya fue oficializada. Solo el Directivo puede modificarla." }
     }
 
     const studentsResult = await payload.find({
@@ -803,10 +794,38 @@ export async function createStudentAction(
   }
 }
 
+export async function studentAppearsInOfficialMarksAction(
+  id: string,
+): Promise<{ ok: true; appears: boolean } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "No tienes permiso para consultar esta información." }
+  }
+  if (!isString(id)) return { ok: false, error: "Identificador inválido." }
+  const numericId = Number(id)
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return { ok: false, error: "Identificador inválido." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    const appears = await isStudentInOfficialMarks(payload, numericId)
+    return { ok: true, appears }
+  } catch (error: any) {
+    console.error(
+      "STUDENT OFFICIAL MARKS CHECK ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return { ok: false, error: "No fue posible verificar las listas oficiales." }
+  }
+}
+
 export async function updateStudentAction(
   id: string,
   input: Partial<StudentInput>,
-): Promise<{ ok: true; student: Student } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; student: Student; studentInOfficialMarks: boolean }
+  | { ok: false; error: string }
+> {
   const user = await appAuth.currentUser()
   if (!user || user.role !== "Directivo") {
     return { ok: false, error: "No tienes permiso para editar alumnos." }
@@ -915,7 +934,14 @@ export async function updateStudentAction(
       overrideAccess: false,
       user,
     })
-    return { ok: true, student: mapStudentDoc(doc as StudentDoc, parseListNumber((doc as StudentDoc).matricula)) }
+    const studentInOfficialMarks = groupChanged
+      ? await isStudentInOfficialMarks(payload, numericId)
+      : false
+    return {
+      ok: true,
+      student: mapStudentDoc(doc as StudentDoc, parseListNumber((doc as StudentDoc).matricula)),
+      studentInOfficialMarks,
+    }
   } catch (error: any) {
     console.error(
       "UPDATE STUDENT ERROR",
@@ -1134,15 +1160,7 @@ export async function createAttendanceAction(
       if (!owns) {
         return { ok: false, error: "No tienes permiso sobre este alumno." }
       }
-      const student = await payload.findByID({
-        collection: "students",
-        id: Number(input.studentId),
-        depth: 0,
-        overrideAccess: true,
-        user,
-      })
-      const groupId = getRelationId((student as StudentDoc | null)?.group)
-      if (groupId && await isDateOfficialized(payload, groupId, input.date)) {
+      if (await isStudentDateOfficialized(payload, input.studentId, input.date)) {
         return { ok: false, error: "La lista ya fue oficializada. Solo el Directivo puede modificarla." }
       }
     }
@@ -1216,15 +1234,7 @@ export async function updateAttendanceAction(
         ? input.date
         : toISODate(existing?.date)
       if (studentId && effectiveDate) {
-        const student = await payload.findByID({
-          collection: "students",
-          id: studentId,
-          depth: 0,
-          overrideAccess: true,
-          user,
-        })
-        const groupId = getRelationId((student as StudentDoc | null)?.group)
-        if (groupId && await isDateOfficialized(payload, groupId, effectiveDate)) {
+        if (await isStudentDateOfficialized(payload, studentId, effectiveDate)) {
           return { ok: false, error: "La lista ya fue oficializada. Solo el Directivo puede modificarla." }
         }
       }

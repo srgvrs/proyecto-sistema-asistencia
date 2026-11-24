@@ -15,6 +15,7 @@ import {
   createVisitorAction,
   deleteStudentAction,
   deleteTeacherAction,
+  studentAppearsInOfficialMarksAction,
   deleteTeacherJustificationAction,
   deleteVisitorAction,
   loadSchoolStateAction,
@@ -1284,25 +1285,43 @@ function GroupStudentManagement({
     });
   };
 
+  const performDeleteStudent = (student: Student) => {
+    setNotice(null);
+    startTransition(async () => {
+      const result = await deleteStudentAction(student.id);
+      if (!result.ok) {
+        setNotice({ type: "error", text: result.error });
+        return;
+      }
+      setStudents((current) => current.filter((item) => item.id !== student.id));
+      onDeleteRecords(student.id);
+      setNotice({ type: "success", text: `${student.name} fue eliminado del grupo ${student.group}.` });
+      router.refresh();
+    });
+  };
+
   const deleteStudent = (student: Student) => {
     requestConfirmation({
       title: "Eliminar alumno",
       message: `Se eliminará a ${student.name} del grupo ${student.group}, junto con sus registros de asistencia. ¿Deseas continuar?`,
       confirmLabel: "Sí, eliminar",
       tone: "danger",
-    }, () => {
-      setNotice(null);
-      startTransition(async () => {
-        const result = await deleteStudentAction(student.id);
-        if (!result.ok) {
-          setNotice({ type: "error", text: result.error });
-          return;
-        }
-        setStudents((current) => current.filter((item) => item.id !== student.id));
-        onDeleteRecords(student.id);
-        setNotice({ type: "success", text: `${student.name} fue eliminado del grupo ${student.group}.` });
-        router.refresh();
-      });
+    }, async () => {
+      const check = await studentAppearsInOfficialMarksAction(student.id);
+      if (!check.ok) {
+        setNotice({ type: "error", text: check.error });
+        return;
+      }
+      if (!check.appears) {
+        performDeleteStudent(student);
+        return;
+      }
+      requestConfirmation({
+        title: "Alumno en listas oficiales",
+        message: `${student.name} aparece en listas oficiales. Su asistencia oficial se conservará, pero ya no estará ligado a un alumno activo.`,
+        confirmLabel: "Sí, eliminar de todos modos",
+        tone: "danger",
+      }, () => performDeleteStudent(student));
     });
   };
 
@@ -1383,7 +1402,7 @@ function GroupStudentManagement({
     if (groupChanged) {
       requestConfirmation({
         title: "Cambiar de grupo",
-        message: `${student.name} pasará de ${student.group} a ${nextGroup.name}, y su matrícula cambiará de ${previousMatricula} a ${nextMatricula}. ¿Deseas continuar?`,
+        message: `${student.name} pasará de ${student.group} a ${nextGroup.name}, y su matrícula cambiará de ${previousMatricula} a ${nextMatricula}. Si el alumno aparece en listas oficiales, sus listas pasadas se quedarán en el grupo anterior. ¿Deseas continuar?`,
         confirmLabel: "Sí, mover de grupo",
         tone: "danger",
       }, () => {
