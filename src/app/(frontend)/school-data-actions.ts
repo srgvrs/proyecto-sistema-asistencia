@@ -225,6 +225,63 @@ const parseListNumber = (matricula?: string | null): number => {
   return m ? Number(m[1]) : 0
 }
 
+const buildMatricula = (groupName: string, consecutive: number): string =>
+  `${groupName.replace(/\s+/g, "")}-${consecutive}`
+
+const getGroupMatriculaCounter = async (
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  groupId: number,
+  groupName: string,
+  user: { id: number | string },
+): Promise<number> => {
+  const group = await payload.findByID({
+    collection: "groups",
+    id: groupId,
+    depth: 0,
+    overrideAccess: false,
+    user,
+  }) as (GroupDoc & { lastMatriculaNumber?: number | null }) | null
+  const stored = Number(group?.lastMatriculaNumber ?? 0)
+  const students = await payload.find({
+    collection: "students",
+    where: { group: { equals: groupId } },
+    limit: 2000,
+    depth: 0,
+    overrideAccess: false,
+    user,
+  })
+  const prefix = groupName.replace(/\s+/g, "")
+  const maxExisting = (students.docs as StudentDoc[]).reduce((max, doc) => {
+    const matricula = doc.matricula ?? ""
+    if (!matricula.startsWith(`${prefix}-`)) return max
+    const value = parseListNumber(matricula)
+    return value > max ? value : max
+  }, 0)
+  return Math.max(stored, maxExisting)
+}
+
+const bumpGroupMatriculaCounter = async (
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  groupId: number,
+  value: number,
+  user: { id: number | string },
+): Promise<void> => {
+  try {
+    await payload.update({
+      collection: "groups",
+      id: groupId,
+      data: { lastMatriculaNumber: value },
+      overrideAccess: false,
+      user,
+    })
+  } catch (error: any) {
+    console.error(
+      "BUMP GROUP COUNTER ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+  }
+}
+
 const getRelationName = (value: number | { id: number; name?: string } | null | undefined): string => {
   if (value === null || value === undefined) return ""
   return typeof value === "number" ? String(value) : value.name || String(value.id)
@@ -772,47 +829,60 @@ export async function createStudentAction(
         return { ok: false, error: "Solo puedes agregar alumnos a tus grupos asignados." }
       }
     }
-    const groupStudents = await payload.find({
-      collection: "students",
-      where: { group: { equals: groupId } },
-      limit: 2000,
+    const groupDoc = await payload.findByID({
+      collection: "groups",
+      id: groupId,
+      depth: 0,
       overrideAccess: false,
       user,
-    })
-    const usedNumbers = new Set(
-      (groupStudents.docs as StudentDoc[])
-        .map((doc) => parseListNumber(doc.matricula))
-        .filter((value) => value > 0),
-    )
-    const requestedNumber = parseListNumber(input.matricula)
-    const listNumber = requestedNumber > 0
-      ? requestedNumber
-      : Math.max(0, ...usedNumbers) + 1
-    if (usedNumbers.has(listNumber)) {
-      return { ok: false, error: `El número ${listNumber} ya está asignado en ese grupo.` }
+    }) as GroupDoc | null
+    if (!groupDoc) {
+      return { ok: false, error: "El grupo seleccionado no existe." }
     }
-    const matricula = requestedNumber > 0
-      ? input.matricula.trim()
-      : `${input.matricula.trim().replace(/-\d+$/, "")}-${listNumber}`
     const firstName = firstNameResult.value
     const paternalSurname = paternalSurnameResult.value
     const maternalSurname = maternalSurnameResult.value
     const lastName = normalizePersonName(input.lastName ?? "") || `${paternalSurname} ${maternalSurname}`.trim()
-    const doc = await payload.create({
-      collection: "students",
-      data: {
-        firstName,
-        paternalSurname,
-        maternalSurname: maternalSurname || undefined,
-        lastName,
-        matricula,
-        group: groupId,
-      },
-      overrideAccess: false,
-      user,
-    })
-    const created = doc as StudentDoc
-    return { ok: true, student: mapStudentDoc(created, parseListNumber(created.matricula)) }
+
+    const baseCounter = await getGroupMatriculaCounter(payload, groupId, groupDoc.name, user)
+    let attempt = 0
+    let lastError: any = null
+    while (attempt < 2) {
+      const consecutive = baseCounter + 1 + attempt
+      const matricula = buildMatricula(groupDoc.name, consecutive)
+      try {
+        const doc = await payload.create({
+          collection: "students",
+          data: {
+            firstName,
+            paternalSurname,
+            maternalSurname: maternalSurname || undefined,
+            lastName,
+            matricula,
+            group: groupId,
+          },
+          overrideAccess: false,
+          user,
+        })
+        await bumpGroupMatriculaCounter(payload, groupId, consecutive, user)
+        const created = doc as StudentDoc
+        return { ok: true, student: mapStudentDoc(created, parseListNumber(created.matricula)) }
+      } catch (error: any) {
+        lastError = error
+        if (!/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
+          throw error
+        }
+        attempt += 1
+      }
+    }
+    console.error(
+      "CREATE STUDENT DUPLICATE MATRICULA",
+      JSON.stringify(lastError?.data?.errors ?? lastError?.message ?? lastError, null, 2),
+    )
+    return {
+      ok: false,
+      error: "No fue posible asignar una matrícula única en este grupo. Intenta nuevamente.",
+    }
   } catch (error: any) {
     console.error("ERROR AL CREAR ALUMNO:", error)
     if (/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
@@ -924,16 +994,16 @@ export async function updateStudentAction(
       }) as GroupDoc | null
       if (!group) return { ok: false, error: "El grupo seleccionado no existe." }
 
-      const listNumber = parseListNumber(current.matricula)
-      if (!listNumber) {
-        return { ok: false, error: "El alumno no tiene un número de lista válido en su matrícula." }
+      const currentConsecutive = parseListNumber(current.matricula)
+      if (!currentConsecutive) {
+        return { ok: false, error: "El alumno no tiene un consecutivo válido en su matrícula." }
       }
-      const nextMatricula = `${group.name.replace(/\s+/g, "")}-${listNumber}`
+      const preferredMatricula = buildMatricula(group.name, currentConsecutive)
       const collision = await payload.find({
         collection: "students",
         where: {
           and: [
-            { matricula: { equals: nextMatricula } },
+            { matricula: { equals: preferredMatricula } },
             { id: { not_equals: numericId } },
           ],
         },
@@ -942,14 +1012,16 @@ export async function updateStudentAction(
         overrideAccess: false,
         user,
       })
+      let nextMatricula = preferredMatricula
+      let nextConsecutive = currentConsecutive
       if (collision.docs.length > 0) {
-        return {
-          ok: false,
-          error: `El número de lista ${listNumber} ya está ocupado en ${group.name}. Ajusta la matrícula antes de mover al alumno.`,
-        }
+        const counter = await getGroupMatriculaCounter(payload, nextGroupId as number, group.name, user)
+        nextConsecutive = counter + 1
+        nextMatricula = buildMatricula(group.name, nextConsecutive)
       }
       data.group = nextGroupId as number
       data.matricula = nextMatricula
+      await bumpGroupMatriculaCounter(payload, nextGroupId as number, nextConsecutive, user)
     }
 
     const doc = await payload.update({
