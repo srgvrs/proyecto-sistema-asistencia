@@ -158,25 +158,33 @@ function ConfirmationDialog({
   onClose: () => void;
 }) {
   const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     cancelRef.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !pending) onClose();
+      if (event.key === "Escape" && !pendingRef.current) onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, pending]);
+  }, [onClose]);
 
   const confirm = async () => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setPending(true);
-    await onConfirm();
-    onClose();
+    try {
+      await onConfirm();
+      onClose();
+    } catch {
+      pendingRef.current = false;
+      setPending(false);
+    }
   };
 
   return (
-    <div className="confirmation-backdrop" role="presentation" onMouseDown={() => !pending && onClose()}>
+    <div className="confirmation-backdrop" role="presentation" onMouseDown={() => !pendingRef.current && onClose()}>
       <section className="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message" onMouseDown={(event) => event.stopPropagation()}>
         <div className={`confirmation-icon ${options.tone === "danger" ? "danger" : ""}`}><Icon name={options.tone === "danger" ? "alert" : "check"} /></div>
         <div className="confirmation-copy">
@@ -186,7 +194,7 @@ function ConfirmationDialog({
         </div>
         <div className="confirmation-actions">
           <button ref={cancelRef} className="secondary-button" type="button" onClick={onClose} disabled={pending}>Cancelar</button>
-          <button className={options.tone === "danger" ? "danger-confirm-button" : "primary-button"} type="button" onClick={confirm} disabled={pending}>{pending ? "Procesando…" : options.confirmLabel || "Aceptar"}</button>
+          <button className={options.tone === "danger" ? "danger-confirm-button" : "primary-button"} type="button" onClick={confirm} disabled={pending} aria-busy={pending}>{pending ? "Procesando…" : options.confirmLabel || "Aceptar"}</button>
         </div>
       </section>
     </div>
