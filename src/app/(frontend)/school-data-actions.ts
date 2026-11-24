@@ -42,6 +42,27 @@ const toHHMM = (value: string | null | undefined): string => {
 }
 
 
+const assertDocenteOwnsStudent = async (
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  studentId: number | string,
+  user: { id: number | string },
+): Promise<boolean> => {
+  const student = await payload.findByID({
+    collection: "students",
+    id: Number(studentId),
+    depth: 1,
+    overrideAccess: true,
+  }) as StudentDoc | null
+  const group = student?.group
+  const teacherId = group && typeof group === "object"
+    ? (group as { teacher?: number | { id: number } | null }).teacher
+    : undefined
+  const resolvedTeacherId = teacherId && typeof teacherId === "object"
+    ? teacherId.id
+    : teacherId
+  return String(resolvedTeacherId ?? "") === String(user.id)
+}
+
 const isDateOfficialized = async (
   payload: Awaited<ReturnType<typeof getPayload>>,
   groupId: number | string,
@@ -888,7 +909,7 @@ export async function deleteStudentAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await appAuth.currentUser()
-  if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
+  if (!user || user.role !== "Directivo") {
     return { ok: false, error: "No tienes permiso para eliminar alumnos." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
@@ -898,26 +919,6 @@ export async function deleteStudentAction(
   }
   try {
     const payload = await getPayload({ config })
-
-    if (user.role === "Docente") {
-      const student = await payload.findByID({
-        collection: "students",
-        id: numericId,
-        depth: 1,
-        overrideAccess: true,
-        user,
-      })
-      const group = (student as StudentDoc | null)?.group
-      const teacherId = group && typeof group === "object"
-        ? (group as { teacher?: number | { id: number } | null }).teacher
-        : undefined
-      const resolvedTeacherId = teacherId && typeof teacherId === "object"
-        ? teacherId.id
-        : teacherId
-      if (String(resolvedTeacherId ?? "") !== String(user.id)) {
-        return { ok: false, error: "Solo puedes eliminar alumnos de tus grupos asignados." }
-      }
-    }
 
     await payload.delete({
       collection: "attendance",
@@ -1055,6 +1056,10 @@ export async function createAttendanceAction(
   try {
     const payload = await getPayload({ config })
     if (user.role === "Docente") {
+      const owns = await assertDocenteOwnsStudent(payload, input.studentId, user)
+      if (!owns) {
+        return { ok: false, error: "No tienes permiso sobre este alumno." }
+      }
       const student = await payload.findByID({
         collection: "students",
         id: Number(input.studentId),
@@ -1079,7 +1084,11 @@ export async function createAttendanceAction(
       user,
     })
     return { ok: true, record: mapAttendanceDoc(doc as AttendanceDoc) }
-  } catch {
+  } catch (error: any) {
+    console.error(
+      "CREATE ATTENDANCE ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
     return { ok: false, error: "No fue posible registrar la asistencia." }
   }
 }
@@ -1110,9 +1119,22 @@ export async function updateAttendanceAction(
         overrideAccess: true,
         user,
       }) as AttendanceDoc | null
+      const existingStudentId = Number(getRelationId(existing?.student))
+      if (existingStudentId) {
+        const ownsExisting = await assertDocenteOwnsStudent(payload, existingStudentId, user)
+        if (!ownsExisting) {
+          return { ok: false, error: "No tienes permiso sobre este alumno." }
+        }
+      }
+      if (isString(input.studentId)) {
+        const ownsNew = await assertDocenteOwnsStudent(payload, input.studentId, user)
+        if (!ownsNew) {
+          return { ok: false, error: "No tienes permiso sobre este alumno." }
+        }
+      }
       const studentId = isString(input.studentId)
         ? Number(input.studentId)
-        : Number(getRelationId(existing?.student))
+        : existingStudentId
       const effectiveDate = isISODate(input.date)
         ? input.date
         : toISODate(existing?.date)
@@ -1138,7 +1160,11 @@ export async function updateAttendanceAction(
       user,
     })
     return { ok: true, record: mapAttendanceDoc(doc as AttendanceDoc) }
-  } catch {
+  } catch (error: any) {
+    console.error(
+      "UPDATE ATTENDANCE ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
     return { ok: false, error: "No fue posible actualizar la asistencia." }
   }
 }
@@ -1214,6 +1240,18 @@ export async function updateVisitorAction(
   if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
   try {
     const payload = await getPayload({ config })
+    if (user.role === "Vigilante de Acceso") {
+      const existing = await payload.findByID({
+        collection: "visitors",
+        id,
+        depth: 0,
+        overrideAccess: true,
+        user,
+      }) as VisitorDoc | null
+      if (!existing || getRelationId(existing.registeredBy) !== String(user.id)) {
+        return { ok: false, error: "No tienes permiso sobre este registro." }
+      }
+    }
     const doc = await payload.update({
       collection: "visitors",
       id,
@@ -1222,7 +1260,11 @@ export async function updateVisitorAction(
       user,
     })
     return { ok: true, visitor: mapVisitorDoc(doc as VisitorDoc) }
-  } catch {
+  } catch (error: any) {
+    console.error(
+      "UPDATE VISITOR ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
     return { ok: false, error: "No fue posible actualizar al visitante." }
   }
 }
@@ -1312,6 +1354,18 @@ export async function updateTeacherAttendanceAction(
   if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
   try {
     const payload = await getPayload({ config })
+    if (user.role === "Docente") {
+      const existing = await payload.findByID({
+        collection: "teacher-attendance",
+        id,
+        depth: 0,
+        overrideAccess: true,
+        user,
+      }) as TeacherAttendanceDoc | null
+      if (!existing || getRelationId(existing.teacher) !== String(user.id)) {
+        return { ok: false, error: "No tienes permiso sobre este registro." }
+      }
+    }
     const doc = await payload.update({
       collection: "teacher-attendance",
       id,
@@ -1330,7 +1384,11 @@ export async function updateTeacherAttendanceAction(
         exitTime: updated.exitTime ? toHHMM(updated.exitTime) : null,
       },
     }
-  } catch {
+  } catch (error: any) {
+    console.error(
+      "UPDATE TEACHER ATTENDANCE ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
     return { ok: false, error: "No fue posible actualizar la asistencia docente." }
   }
 }
