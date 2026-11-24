@@ -471,6 +471,248 @@ const mapOfficialListDoc = (
   }
 }
 
+type CorrectOfficialAttendanceInput = {
+  listId: string
+  date: string
+  entries: Array<{ studentId: string; status: Status }>
+}
+
+export async function correctOfficialAttendanceAction(
+  input: CorrectOfficialAttendanceInput,
+): Promise<
+  | { ok: true; changed: number; errors: string[]; officialAttendanceList: OfficialAttendanceList }
+  | { ok: false; error: string; changed: number; errors: string[]; officialAttendanceList: OfficialAttendanceList | null }
+> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return {
+      ok: false,
+      error: "Solo un directivo puede corregir la asistencia oficial.",
+      changed: 0,
+      errors: [],
+      officialAttendanceList: null,
+    }
+  }
+  if (
+    !isString(input.listId) ||
+    !isISODate(input.date) ||
+    !Array.isArray(input.entries) ||
+    input.entries.length > 500 ||
+    !input.entries.every((item) =>
+      item && isString(item.studentId) && ["Presente", "Retardo", "Falta"].includes(item.status),
+    )
+  ) {
+    return {
+      ok: false,
+      error: "Los datos de la corrección no son válidos.",
+      changed: 0,
+      errors: [],
+      officialAttendanceList: null,
+    }
+  }
+  const numericListId = Number(input.listId)
+  if (!Number.isInteger(numericListId) || numericListId <= 0) {
+    return {
+      ok: false,
+      error: "Identificador inválido.",
+      changed: 0,
+      errors: [],
+      officialAttendanceList: null,
+    }
+  }
+
+  try {
+    const payload = await getPayload({ config })
+
+    const listDoc = await payload.findByID({
+      collection: "official-lists",
+      id: numericListId,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    }) as OfficialListDoc | null
+    if (!listDoc) {
+      return {
+        ok: false,
+        error: "La lista oficial no existe.",
+        changed: 0,
+        errors: [],
+        officialAttendanceList: null,
+      }
+    }
+
+    const existingMarks = (listDoc.marks && typeof listDoc.marks === "object" && !Array.isArray(listDoc.marks))
+      ? (listDoc.marks as Record<string, Record<string, "." | "X">>)
+      : {}
+    const roster = parseRoster(listDoc.roster) ?? []
+    const rosterIds = new Set(roster.map((entry) => entry.studentId))
+    const dateInMarks = Object.values(existingMarks).some(
+      (studentMarks) => studentMarks && typeof studentMarks === "object" && input.date in studentMarks,
+    )
+    if (!dateInMarks) {
+      return {
+        ok: false,
+        error: "La fecha no pertenece a esta lista oficial.",
+        changed: 0,
+        errors: [],
+        officialAttendanceList: null,
+      }
+    }
+    for (const entry of input.entries) {
+      const inRoster = rosterIds.has(entry.studentId)
+      const inMarks = Boolean(existingMarks[entry.studentId] && input.date in existingMarks[entry.studentId])
+      if (!inRoster && !inMarks) {
+        return {
+          ok: false,
+          error: "La lista incluye alumnos que no pertenecen a esta lista oficial.",
+          changed: 0,
+          errors: [],
+          officialAttendanceList: null,
+        }
+      }
+    }
+
+    const studentIds = input.entries.map((entry) => Number(entry.studentId))
+    const existingAttendance = await payload.find({
+      collection: "attendance",
+      where: {
+        and: [
+          { student: { in: studentIds } },
+          { date: { equals: `${input.date}T00:00:00.000Z` } },
+        ],
+      },
+      limit: 500,
+      overrideAccess: false,
+      user,
+    })
+    const attendanceByStudent = new Map(
+      (existingAttendance.docs as AttendanceDoc[]).map((doc) => [getRelationId(doc.student), doc]),
+    )
+
+    const nextMarks: Record<string, Record<string, "." | "X">> = { ...existingMarks }
+    const errors: string[] = []
+    let changed = 0
+
+    for (const entry of input.entries) {
+      const studentId = entry.studentId
+      const existing = attendanceByStudent.get(studentId)
+      const currentStatus = existing ? mapStatusFromCollection(existing.status) : null
+      if (currentStatus === entry.status) continue
+
+      const collectionStatus = mapStatusToCollection(entry.status)
+      try {
+        if (existing) {
+          await payload.update({
+            collection: "attendance",
+            id: existing.id,
+            data: { status: collectionStatus },
+            overrideAccess: false,
+            user,
+          })
+        } else {
+          await payload.create({
+            collection: "attendance",
+            data: {
+              student: Number(studentId),
+              date: `${input.date}T00:00:00.000Z`,
+              status: collectionStatus,
+              registeredBy: user.id,
+            },
+            overrideAccess: false,
+            user,
+          })
+        }
+      } catch (error: any) {
+        console.error(
+          "CORRECT OFFICIAL ATTENDANCE ERROR",
+          JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+        )
+        errors.push(`No fue posible actualizar la asistencia del alumno ${studentId}.`)
+        continue
+      }
+
+      nextMarks[studentId] = {
+        ...(nextMarks[studentId] || {}),
+        [input.date]: entry.status === "Falta" ? "X" : ".",
+      }
+
+      try {
+        await payload.create({
+          collection: "official-list-corrections",
+          data: {
+            officialList: numericListId,
+            date: input.date,
+            student: Number(studentId),
+            previousStatus: currentStatus ?? entry.status,
+            newStatus: entry.status,
+            correctedBy: user.id,
+            correctedAt: new Date().toISOString(),
+          },
+          overrideAccess: false,
+          user,
+        })
+      } catch (error: any) {
+        console.error(
+          "CORRECT OFFICIAL ATTENDANCE HISTORY ERROR",
+          JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+        )
+        errors.push(`No fue posible registrar el historial del alumno ${studentId}.`)
+      }
+
+      changed += 1
+    }
+
+    if (changed === 0) {
+      return {
+        ok: false,
+        error: "No hay cambios.",
+        changed: 0,
+        errors,
+        officialAttendanceList: null,
+      }
+    }
+
+    const updated = await payload.update({
+      collection: "official-lists",
+      id: numericListId,
+      data: { marks: nextMarks },
+      overrideAccess: false,
+      user,
+    }) as OfficialListDoc
+
+    const officialDates = [...new Set(
+      Object.values(nextMarks).flatMap((studentMarks) => Object.keys(studentMarks || {})),
+    )].sort()
+    const month = officialDates[0]?.slice(0, 7) || monthFromTitle(updated.title) || ""
+    const officialAttendanceList: OfficialAttendanceList = {
+      id: String(updated.id),
+      group: getRelationName(updated.group),
+      month,
+      teacher: (typeof updated.teacherName === "string" && updated.teacherName.trim())
+        ? updated.teacherName
+        : "",
+      officialDates,
+      students: roster,
+      marks: nextMarks,
+      updatedAt: new Date().toISOString(),
+    }
+
+    return { ok: true, changed, errors, officialAttendanceList }
+  } catch (error: any) {
+    console.error(
+      "CORRECT OFFICIAL ATTENDANCE ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return {
+      ok: false,
+      error: "No fue posible corregir la lista oficial. Intenta nuevamente.",
+      changed: 0,
+      errors: [],
+      officialAttendanceList: null,
+    }
+  }
+}
+
 type OfficializeAttendanceInput = {
   group: string
   date: string

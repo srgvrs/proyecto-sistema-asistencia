@@ -14,6 +14,7 @@ import { Groups } from './collections/Groups'
 import { Attendance } from './collections/Attendance'
 import { Visitors } from './collections/Visitors'
 import { OfficialLists } from './collections/OfficialLists'
+import { OfficialListCorrections } from './collections/OfficialListCorrections'
 import { TeacherAttendance } from './collections/TeacherAttendance'
 import { TeacherJustifications } from './collections/TeacherJustifications'
 
@@ -57,6 +58,7 @@ export default buildConfig({
     Attendance,
     Visitors,
     OfficialLists,
+    OfficialListCorrections,
     TeacherAttendance,
     TeacherJustifications,
   ],
