@@ -17,6 +17,7 @@ import { OfficialLists } from './collections/OfficialLists'
 import { OfficialListCorrections } from './collections/OfficialListCorrections'
 import { TeacherAttendance } from './collections/TeacherAttendance'
 import { TeacherJustifications } from './collections/TeacherJustifications'
+import { SchoolYearClosures } from './collections/SchoolYearClosures'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -61,6 +62,7 @@ export default buildConfig({
     OfficialListCorrections,
     TeacherAttendance,
     TeacherJustifications,
+    SchoolYearClosures,
   ],
   globals: [],
   typescript: {

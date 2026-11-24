@@ -2401,6 +2401,385 @@ export async function previewSchoolYearCloseAction(
   }
 }
 
+type CloseSchoolYearResult =
+  | {
+      ok: true
+      promoted: number
+      graduated: number
+      createdGroups: number
+      errors: string[]
+    }
+  | {
+      ok: false
+      error: string
+      promoted: number
+      graduated: number
+      createdGroups: number
+      errors: string[]
+    }
+
+type SchoolYearClosureDoc = {
+  id: number
+  cycleLabel: string
+}
+
+export async function closeSchoolYearAction(
+  input: { excludedStudentIds?: string[]; confirmText?: string },
+): Promise<CloseSchoolYearResult> {
+  const emptyResult = { promoted: 0, graduated: 0, createdGroups: 0, errors: [] as string[] }
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede cerrar el ciclo escolar.", ...emptyResult }
+  }
+  if (input?.confirmText !== "CERRAR CICLO") {
+    return { ok: false, error: "Debes escribir CERRAR CICLO para confirmar.", ...emptyResult }
+  }
+  const rawExcluded = Array.isArray(input?.excludedStudentIds) ? input.excludedStudentIds : []
+  if (rawExcluded.length > 5000 || !rawExcluded.every((id) => isString(id))) {
+    return { ok: false, error: "La lista de alumnos excluidos no es válida.", ...emptyResult }
+  }
+  const excludedIds = new Set<string>()
+  for (const id of rawExcluded) {
+    const numeric = Number(id)
+    if (!Number.isInteger(numeric) || numeric <= 0) {
+      return { ok: false, error: "La lista de alumnos excluidos no es válida.", ...emptyResult }
+    }
+    excludedIds.add(String(numeric))
+  }
+
+  const cycleLabel = getCycleLabel(todayISO())
+  if (!cycleLabel) {
+    return { ok: false, error: "No fue posible determinar el ciclo escolar actual.", ...emptyResult }
+  }
+
+  let payload: Awaited<ReturnType<typeof getPayload>>
+  try {
+    payload = await getPayload({ config })
+  } catch (error: any) {
+    console.error(
+      "CLOSE SCHOOL YEAR PAYLOAD ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return { ok: false, error: "No fue posible iniciar el cierre de ciclo.", ...emptyResult }
+  }
+
+  let closureId: number | null = null
+  let studentsMoved = false
+
+  try {
+    const existing = await payload.find({
+      collection: "school-year-closures",
+      where: { cycleLabel: { equals: cycleLabel } },
+      limit: 1,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    })
+    if (existing.docs.length > 0) {
+      return {
+        ok: false,
+        error: `El ciclo ${cycleLabel} ya fue cerrado.`,
+        ...emptyResult,
+      }
+    }
+
+    const groupsResult = await payload.find({
+      collection: "groups",
+      limit: 500,
+      sort: "name",
+      depth: 0,
+      overrideAccess: false,
+      user,
+    })
+    const studentsResult = await payload.find({
+      collection: "students",
+      limit: 5000,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    })
+
+    const groupDocs = groupsResult.docs as GroupDoc[]
+    const studentDocs = studentsResult.docs as StudentDoc[]
+
+    const groupsByName = new Map<string, GroupDoc>()
+    for (const group of groupDocs) groupsByName.set(group.name, group)
+
+    const matriculaOwners = new Map<string, string>()
+    for (const doc of studentDocs) {
+      if (doc.matricula) matriculaOwners.set(doc.matricula, String(doc.id))
+    }
+
+    const studentsByGroupId = new Map<string, StudentDoc[]>()
+    for (const doc of studentDocs) {
+      const groupId = getRelationId(doc.group)
+      if (!groupId) continue
+      const list = studentsByGroupId.get(groupId) || []
+      list.push(doc)
+      studentsByGroupId.set(groupId, list)
+    }
+
+    type PlannedStudent = {
+      doc: StudentDoc
+      destinationGroupName: string
+      isGraduating: boolean
+      nextMatricula: string
+      nextConsecutive: number
+    }
+    type PlannedGroup = {
+      group: GroupDoc
+      grade: number
+      letter: string
+      destinationGroupName: string
+      isGraduating: boolean
+      students: PlannedStudent[]
+    }
+
+    const plan: PlannedGroup[] = []
+    const warnings: string[] = []
+
+    for (const group of groupDocs) {
+      const match = /^(\d)°\s*([A-Za-z])$/.exec(group.name.trim())
+      if (!match) {
+        warnings.push(`El grupo "${group.name}" no tiene un nombre con el formato esperado (por ejemplo "1° A"). Se omitirá del cierre de ciclo.`)
+        continue
+      }
+      const grade = Number(match[1])
+      const letter = match[2].toUpperCase()
+      if (!Number.isInteger(grade) || grade < 1 || grade > 6) {
+        warnings.push(`El grupo "${group.name}" tiene un grado fuera de rango. Se omitirá del cierre de ciclo.`)
+        continue
+      }
+      const isGraduating = grade === 6
+      const destinationGroupName = isGraduating ? "Egresado" : `${grade + 1}° ${letter}`
+      const groupStudents = (studentsByGroupId.get(String(group.id)) || [])
+        .filter((doc) => (doc.status ?? "Activo") === "Activo")
+        .filter((doc) => !excludedIds.has(String(doc.id)))
+        .slice()
+        .sort((a, b) => {
+          const partsA = resolveStudentNameParts(a)
+          const partsB = resolveStudentNameParts(b)
+          const options = { sensitivity: "base" as const }
+          return (
+            partsA.paternalSurname.localeCompare(partsB.paternalSurname, "es-MX", options) ||
+            partsA.maternalSurname.localeCompare(partsB.maternalSurname, "es-MX", options) ||
+            partsA.givenNames.localeCompare(partsB.givenNames, "es-MX", options)
+          )
+        })
+
+      const plannedStudents: PlannedStudent[] = []
+      for (const doc of groupStudents) {
+        const studentId = String(doc.id)
+        if (isGraduating) {
+          plannedStudents.push({
+            doc,
+            destinationGroupName,
+            isGraduating: true,
+            nextMatricula: doc.matricula ?? "",
+            nextConsecutive: 0,
+          })
+          continue
+        }
+        const consecutive = parseListNumber(doc.matricula)
+        const prefix = destinationGroupName.replace(/\s+/g, "")
+        let nextConsecutive = consecutive > 0 ? consecutive : 1
+        let nextMatricula = `${prefix}-${nextConsecutive}`
+        const owner = matriculaOwners.get(nextMatricula)
+        if (owner && owner !== studentId) {
+          let candidate = nextConsecutive + 1
+          while (matriculaOwners.has(`${prefix}-${candidate}`)) candidate += 1
+          nextConsecutive = candidate
+          nextMatricula = `${prefix}-${nextConsecutive}`
+        }
+        matriculaOwners.set(nextMatricula, studentId)
+        plannedStudents.push({
+          doc,
+          destinationGroupName,
+          isGraduating: false,
+          nextMatricula,
+          nextConsecutive,
+        })
+      }
+
+      plan.push({
+        group,
+        grade,
+        letter,
+        destinationGroupName,
+        isGraduating,
+        students: plannedStudents,
+      })
+    }
+
+    // Create the closure record BEFORE moving any student so two rapid clicks
+    // cannot both proceed. If anything fails before the first student is moved,
+    // the record is deleted so the Directivo can retry.
+    const closure = await payload.create({
+      collection: "school-year-closures",
+      data: {
+        cycleLabel,
+        closedAt: new Date().toISOString(),
+        closedBy: user.id,
+        promoted: 0,
+        graduated: 0,
+        createdGroups: 0,
+      },
+      overrideAccess: false,
+      user,
+    }) as SchoolYearClosureDoc
+    closureId = Number(closure.id)
+
+    // Process from highest grade to lowest so promoted students never collide
+    // with students still sitting in their current group.
+    const orderedPlan = plan.slice().sort((a, b) => b.grade - a.grade)
+
+    const errors: string[] = [...warnings]
+    let promoted = 0
+    let graduated = 0
+    let createdGroups = 0
+
+    for (const plannedGroup of orderedPlan) {
+      if (plannedGroup.isGraduating) {
+        for (const planned of plannedGroup.students) {
+          try {
+            await payload.update({
+              collection: "students",
+              id: planned.doc.id,
+              data: { status: "Egresado" },
+              overrideAccess: false,
+              user,
+            })
+            studentsMoved = true
+            graduated += 1
+          } catch (error: any) {
+            console.error(
+              "CLOSE SCHOOL YEAR GRADUATE ERROR",
+              JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+            )
+            errors.push(`No fue posible egresar al alumno ${planned.doc.id}.`)
+          }
+        }
+        continue
+      }
+
+      let destinationGroup = groupsByName.get(plannedGroup.destinationGroupName) ?? null
+      if (!destinationGroup) {
+        try {
+          const created = await payload.create({
+            collection: "groups",
+            data: {
+              name: plannedGroup.destinationGroupName,
+              grade: plannedGroup.grade + 1,
+            },
+            overrideAccess: false,
+            user,
+          }) as GroupDoc
+          destinationGroup = created
+          groupsByName.set(created.name, created)
+          createdGroups += 1
+        } catch (error: any) {
+          console.error(
+            "CLOSE SCHOOL YEAR CREATE GROUP ERROR",
+            JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+          )
+          errors.push(`No fue posible crear el grupo ${plannedGroup.destinationGroupName}.`)
+          continue
+        }
+      }
+
+      const destinationGroupId = Number(destinationGroup.id)
+      let maxConsecutive = Number((destinationGroup as GroupDoc & { lastMatriculaNumber?: number | null }).lastMatriculaNumber ?? 0)
+
+      for (const planned of plannedGroup.students) {
+        try {
+          await payload.update({
+            collection: "students",
+            id: planned.doc.id,
+            data: {
+              group: destinationGroupId,
+              matricula: planned.nextMatricula,
+            },
+            overrideAccess: false,
+            user,
+          })
+          studentsMoved = true
+          promoted += 1
+          if (planned.nextConsecutive > maxConsecutive) maxConsecutive = planned.nextConsecutive
+        } catch (error: any) {
+          console.error(
+            "CLOSE SCHOOL YEAR PROMOTE ERROR",
+            JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+          )
+          errors.push(`No fue posible promover al alumno ${planned.doc.id}.`)
+        }
+      }
+
+      if (maxConsecutive > 0) {
+        try {
+          await payload.update({
+            collection: "groups",
+            id: destinationGroupId,
+            data: { lastMatriculaNumber: maxConsecutive },
+            overrideAccess: false,
+            user,
+          })
+        } catch (error: any) {
+          console.error(
+            "CLOSE SCHOOL YEAR COUNTER ERROR",
+            JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+          )
+          errors.push(`No fue posible actualizar el contador del grupo ${plannedGroup.destinationGroupName}.`)
+        }
+      }
+    }
+
+    try {
+      await payload.update({
+        collection: "school-year-closures",
+        id: closureId,
+        data: {
+          promoted,
+          graduated,
+          createdGroups,
+          errors: errors.length ? errors : null,
+        },
+        overrideAccess: true,
+      })
+    } catch (error: any) {
+      console.error(
+        "CLOSE SCHOOL YEAR FINALIZE ERROR",
+        JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+      )
+    }
+
+    return { ok: true, promoted, graduated, createdGroups, errors }
+  } catch (error: any) {
+    console.error(
+      "CLOSE SCHOOL YEAR ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    if (closureId !== null && !studentsMoved) {
+      try {
+        await payload.delete({
+          collection: "school-year-closures",
+          id: closureId,
+          overrideAccess: true,
+        })
+      } catch (cleanupError: any) {
+        console.error(
+          "CLOSE SCHOOL YEAR CLEANUP ERROR",
+          JSON.stringify(cleanupError?.data?.errors ?? cleanupError?.message ?? cleanupError, null, 2),
+        )
+      }
+    }
+    return {
+      ok: false,
+      error: "No fue posible completar el cierre de ciclo.",
+      ...emptyResult,
+    }
+  }
+}
+
 export async function updateTeacherEmploymentStatusAction(
   teacherId: string,
   status: "Activo" | "Baja temporal",

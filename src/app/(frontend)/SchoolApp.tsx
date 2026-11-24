@@ -18,6 +18,7 @@ import {
   studentAppearsInOfficialMarksAction,
   deleteTeacherJustificationAction,
   deleteVisitorAction,
+  closeSchoolYearAction,
   loadOfficialAttendanceStatusAction,
   loadSchoolStateAction,
   previewSchoolYearCloseAction,
@@ -3164,11 +3165,43 @@ type SchoolYearClosePreview = {
   };
 };
 
+type SchoolYearCloseResult = {
+  ok: boolean;
+  error?: string;
+  promoted: number;
+  graduated: number;
+  createdGroups: number;
+  errors: string[];
+};
+
 function SchoolYearClose() {
   const [isPending, startTransition] = useTransition();
   const [preview, setPreview] = useState<SchoolYearClosePreview | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  const [result, setResult] = useState<SchoolYearCloseResult | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const confirmInputRef = useRef<HTMLInputElement>(null);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
+  const confirmPendingRef = useRef(false);
+  const [confirmPending, setConfirmPending] = useState(false);
+  const executed = result?.ok === true;
+
+  useEffect(() => {
+    if (!confirmOpen) return;
+    confirmCancelRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !confirmPendingRef.current) {
+        setConfirmOpen(false);
+        setConfirmText("");
+        setConfirmError("");
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [confirmOpen]);
 
   const loadPreview = useCallback((excludedIds: Set<string>) => {
     setError("");
@@ -3187,12 +3220,56 @@ function SchoolYearClose() {
   }, [loadPreview]);
 
   const toggleExcluded = (studentId: string) => {
+    if (executed) return;
     setExcluded((current) => {
       const next = new Set(current);
       if (next.has(studentId)) next.delete(studentId);
       else next.add(studentId);
       loadPreview(next);
       return next;
+    });
+  };
+
+  const openConfirm = () => {
+    if (executed || isPending || !preview) return;
+    setConfirmText("");
+    setConfirmError("");
+    setConfirmOpen(true);
+  };
+
+  const closeConfirm = () => {
+    if (confirmPendingRef.current) return;
+    setConfirmOpen(false);
+    setConfirmText("");
+    setConfirmError("");
+  };
+
+  const runClose = () => {
+    if (confirmPendingRef.current) return;
+    if (confirmText !== "CERRAR CICLO") {
+      setConfirmError("Escribe exactamente CERRAR CICLO para continuar.");
+      return;
+    }
+    confirmPendingRef.current = true;
+    setConfirmPending(true);
+    setConfirmError("");
+    startTransition(async () => {
+      const response = await closeSchoolYearAction({
+        excludedStudentIds: [...excluded],
+        confirmText,
+      });
+      confirmPendingRef.current = false;
+      setConfirmPending(false);
+      setConfirmOpen(false);
+      setConfirmText("");
+      setResult({
+        ok: response.ok,
+        error: response.ok ? undefined : response.error,
+        promoted: response.promoted,
+        graduated: response.graduated,
+        createdGroups: response.createdGroups,
+        errors: response.errors,
+      });
     });
   };
 
@@ -3203,6 +3280,17 @@ function SchoolYearClose() {
         <div className="student-counter"><span>{preview?.totals.promoted ?? 0}</span><div><small>ALUMNOS QUE SUBEN</small><strong>{preview?.totals.graduated ?? 0} egresan · {preview?.totals.excluded ?? 0} excluidos</strong></div></div>
       </div>
       {error && <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>No se pudo generar la vista previa</strong><p>{error}</p></div></div>}
+      {result && (
+        <div className={`notice ${result.ok ? "notice-success" : "notice-error"} catalog-notice`}>
+          <Icon name={result.ok ? "check" : "alert"} />
+          <div>
+            <strong>{result.ok ? "Cierre de ciclo ejecutado" : "No se pudo ejecutar el cierre"}</strong>
+            {result.error && <p>{result.error}</p>}
+            <p>{result.promoted} promovidos · {result.graduated} egresados · {result.createdGroups} grupos creados</p>
+            {result.errors.length > 0 && result.errors.map((message) => <p key={message}>{message}</p>)}
+          </div>
+        </div>
+      )}
       {preview && preview.warnings.length > 0 && (
         <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>Avisos</strong>{preview.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div></div>
       )}
@@ -3228,7 +3316,7 @@ function SchoolYearClose() {
                 {group.students.map((student) => (
                   <div className="student-management-row" key={student.id}>
                     <label className="egresados-toggle">
-                      <input type="checkbox" checked={excluded.has(student.id)} onChange={() => toggleExcluded(student.id)} disabled={isPending} />
+                      <input type="checkbox" checked={excluded.has(student.id)} onChange={() => toggleExcluded(student.id)} disabled={isPending || executed} />
                     </label>
                     <div><span className="avatar">{student.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
                     <span className="group-badge">{student.destination}</span>
@@ -3245,11 +3333,45 @@ function SchoolYearClose() {
         </>
       )}
       <div className="roll-footer">
-        <p><Icon name="alert" size={18} /> Esta es solo una vista previa. Aún no se modifica ningún dato.</p>
+        <p><Icon name="alert" size={18} /> {executed ? "El cierre de ciclo ya fue ejecutado." : "Al ejecutar el cierre se moverán los alumnos y se egresará a sexto grado."}</p>
         <div>
-          <button className="primary-button" type="button" disabled title="Disponible en la siguiente etapa">Siguiente etapa</button>
+          <button className="primary-button" type="button" onClick={openConfirm} disabled={executed || isPending || !preview}>
+            {executed ? "Ciclo cerrado" : isPending ? "Procesando…" : "Ejecutar cierre de ciclo"}
+          </button>
         </div>
       </div>
+      {confirmOpen && preview && (
+        <div className="confirmation-backdrop" role="presentation" onMouseDown={() => !confirmPendingRef.current && closeConfirm()}>
+          <section className="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-cycle-title" aria-describedby="close-cycle-message" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="confirmation-icon danger"><Icon name="alert" /></div>
+            <div className="confirmation-copy">
+              <p className="eyebrow">CONFIRMAR CIERRE DE CICLO</p>
+              <h2 id="close-cycle-title">Ejecutar cierre de ciclo</h2>
+              <p id="close-cycle-message">
+                Se promoverán <strong>{preview.totals.promoted}</strong> alumnos, egresarán <strong>{preview.totals.graduated}</strong> y se crearán <strong>{preview.totals.groupsToCreate}</strong> grupos. Esta acción no se puede deshacer.
+              </p>
+              <label>
+                Escribe <strong>CERRAR CICLO</strong> para confirmar
+                <input
+                  ref={confirmInputRef}
+                  value={confirmText}
+                  onChange={(event) => { setConfirmText(event.target.value); setConfirmError(""); }}
+                  placeholder="CERRAR CICLO"
+                  autoComplete="off"
+                  disabled={confirmPending}
+                />
+              </label>
+              {confirmError && <p className="form-alert"><Icon name="alert" size={16} /><span>{confirmError}</span></p>}
+            </div>
+            <div className="confirmation-actions">
+              <button ref={confirmCancelRef} className="secondary-button" type="button" onClick={closeConfirm} disabled={confirmPending}>Cancelar</button>
+              <button className="danger-confirm-button" type="button" onClick={runClose} disabled={confirmPending || confirmText !== "CERRAR CICLO"} aria-busy={confirmPending}>
+                {confirmPending ? "Procesando…" : "Sí, cerrar ciclo"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
