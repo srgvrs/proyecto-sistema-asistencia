@@ -55,7 +55,7 @@ export type Visitor = {
 }
 
 export type TeacherAttendance = {
-  id: number
+  id: string
   teacher: string
   date: string
   entryTime: string
