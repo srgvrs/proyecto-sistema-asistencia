@@ -1035,6 +1035,8 @@ export async function loadSchoolStateAction(): Promise<
           user,
         }
 
+    const canReadVisitors = user.role === "Directivo" || user.role === "Vigilante de Acceso"
+
     const [
       groupsResult,
       studentsResult,
@@ -1048,7 +1050,9 @@ export async function loadSchoolStateAction(): Promise<
       safeFind({ collection: "groups", limit: 200, sort: "name", overrideAccess: false, user }),
       safeFind({ collection: "students", limit: 2000, sort: "paternalSurname", overrideAccess: false, user }),
       safeFind({ collection: "attendance", limit: 5000, sort: "-date", overrideAccess: false, user }),
-      safeFind({ collection: "visitors", limit: 500, sort: "-entryTime", overrideAccess: false, user }),
+      canReadVisitors
+        ? safeFind({ collection: "visitors", limit: 500, sort: "-entryTime", overrideAccess: false, user })
+        : Promise.resolve({ docs: [], totalDocs: 0 } as any),
       safeFind({ collection: "official-lists", limit: 200, sort: "-createdAt", overrideAccess: false, user }),
       safeFind(teachersQuery),
       safeFind({ collection: "teacher-attendance", limit: 2000, sort: "-date", overrideAccess: false, user }),
@@ -1946,7 +1950,6 @@ export async function updateTeacherAttendanceAction(
   id: string,
   input: { exitTime?: string | null },
 ): Promise<{ ok: true; record: TeacherAttendance } | { ok: false; error: string }> {
-  console.log("[SALIDA] updateTeacherAttendanceAction called", { id, input })
   const user = await appAuth.currentUser()
   if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para actualizar asistencia docente." }
@@ -1970,15 +1973,6 @@ export async function updateTeacherAttendanceAction(
         overrideAccess: true,
         user,
       }) as TeacherAttendanceDoc | null
-      console.log("[SALIDA] existing doc", {
-        id,
-        found: Boolean(existing),
-        docId: existing?.id,
-        teacher: existing ? getRelationId(existing.teacher) : null,
-        date: existing ? toISODate(existing.date) : null,
-        todayISO: todayISO(),
-        userId: String(user.id),
-      })
       if (!existing || getRelationId(existing.teacher) !== String(user.id)) {
         return { ok: false, error: "No tienes permiso sobre este registro." }
       }
@@ -1994,13 +1988,6 @@ export async function updateTeacherAttendanceAction(
       user,
     })
     const updated = doc as TeacherAttendanceDoc
-    console.log("[SALIDA] update result", {
-      id,
-      updatedId: updated.id,
-      teacher: getRelationId(updated.teacher),
-      date: toISODate(updated.date),
-      exitTime: updated.exitTime,
-    })
     if (input.exitTime !== undefined && input.exitTime !== null && !updated.exitTime) {
       console.error(
         "UPDATE TEACHER ATTENDANCE NOT PERSISTED",
@@ -2026,13 +2013,6 @@ export async function updateTeacherAttendanceAction(
       )
       return { ok: false, error: "La salida no se guardó en el servidor. Intenta nuevamente." }
     }
-    console.log("[SALIDA] verified doc", {
-      id,
-      verifiedId: verified.id,
-      teacher: getRelationId(verified.teacher),
-      date: toISODate(verified.date),
-      exitTime: verified.exitTime,
-    })
     return {
       ok: true,
       record: {
@@ -2530,19 +2510,16 @@ export async function closeSchoolYearAction(
   const emptyResult = { promoted: 0, graduated: 0, createdGroups: 0, errors: [] as string[] }
   const user = await appAuth.currentUser()
   if (!user || user.role !== "Directivo") {
-    console.log("[CIERRE] exit#1 rol", { hasUser: !!user, role: user?.role })
     return { ok: false, error: "Solo un directivo puede cerrar el ciclo escolar.", ...emptyResult }
   }
   const rawExcluded = Array.isArray(input?.excludedStudentIds) ? input.excludedStudentIds : []
   if (rawExcluded.length > 5000 || !rawExcluded.every((id) => isString(id))) {
-    console.log("[CIERRE] exit#3 excluded shape", { length: rawExcluded.length })
     return { ok: false, error: "La lista de alumnos excluidos no es válida.", ...emptyResult }
   }
   const excludedIds = new Set<string>()
   for (const id of rawExcluded) {
     const numeric = Number(id)
     if (!Number.isInteger(numeric) || numeric <= 0) {
-      console.log("[CIERRE] exit#4 excluded id inválido", { id })
       return { ok: false, error: "La lista de alumnos excluidos no es válida.", ...emptyResult }
     }
     excludedIds.add(String(numeric))
@@ -2550,7 +2527,6 @@ export async function closeSchoolYearAction(
 
   const cycleLabel = getCycleLabel(todayISO())
   if (!cycleLabel) {
-    console.log("[CIERRE] exit#5 cycleLabel vacío", { today: todayISO() })
     return { ok: false, error: "No fue posible determinar el ciclo escolar actual.", ...emptyResult }
   }
 
@@ -2562,7 +2538,6 @@ export async function closeSchoolYearAction(
       "CLOSE SCHOOL YEAR PAYLOAD ERROR",
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
-    console.log("[CIERRE] exit#6 payload error")
     return { ok: false, error: "No fue posible iniciar el cierre de ciclo.", ...emptyResult }
   }
 
@@ -2582,7 +2557,6 @@ export async function closeSchoolYearAction(
     const hasPreviousClosures = existing.docs.length > 0
     const expectedConfirmText = hasPreviousClosures ? "CERRAR OTRA VEZ" : "CERRAR CICLO"
     if (input?.confirmText !== expectedConfirmText) {
-      console.log("[CIERRE] exit#2 confirmText", { confirmText: input?.confirmText, expectedConfirmText })
       return { ok: false, error: `Debes escribir ${expectedConfirmText} para confirmar.`, ...emptyResult }
     }
     const recentClosure = (existing.docs as SchoolYearClosureDoc[]).find((doc) => {
@@ -2590,7 +2564,6 @@ export async function closeSchoolYearAction(
       return Number.isFinite(closedAt) && Date.now() - closedAt < 2 * 60 * 1000
     })
     if (recentClosure) {
-      console.log("[CIERRE] exit#7 cierre reciente", { cycleLabel, closureId: recentClosure.id })
       return {
         ok: false,
         error: "Ya se ejecutó un cierre hace unos momentos. Espera antes de intentarlo otra vez.",
@@ -2719,27 +2692,6 @@ export async function closeSchoolYearAction(
         students: plannedStudents,
       })
     }
-
-    const activeStudents = studentDocs.filter((doc) => (doc.status ?? "Activo") === "Activo")
-    const activeAfterExclusion = activeStudents.filter((doc) => !excludedIds.has(String(doc.id)))
-    console.log("[CIERRE] plan calculado", {
-      cycleLabel,
-      alreadyClosed: false,
-      activeStudents: activeStudents.length,
-      activeAfterExclusion: activeAfterExclusion.length,
-      excludedIds: [...excludedIds],
-      groupsInPlan: plan.length,
-      warnings,
-      students: plan.flatMap((plannedGroup) =>
-        plannedGroup.students.map((planned) => ({
-          id: String(planned.doc.id),
-          currentGroup: plannedGroup.group.name,
-          destination: planned.destinationGroupName,
-          nextMatricula: planned.nextMatricula,
-          isGraduating: planned.isGraduating,
-        })),
-      ),
-    })
 
     // Create the closure record BEFORE moving any student so two rapid clicks
     // cannot both proceed. If anything fails before the first student is moved,
@@ -2904,7 +2856,6 @@ export async function closeSchoolYearAction(
         )
       }
     }
-    console.log("[CIERRE] exit#8 throw inesperado", { closureId, studentsMoved })
     return {
       ok: false,
       error: "No fue posible completar el cierre de ciclo.",
