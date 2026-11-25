@@ -1121,11 +1121,11 @@ export async function loadSchoolStateAction(): Promise<
       teacherGroups[teacherName] = list
     }
 
-    const teacherAttendance: TeacherAttendance[] = (teacherAttendanceResult.docs as TeacherAttendanceDoc[]).map((doc, index) => {
+    const teacherAttendance: TeacherAttendance[] = (teacherAttendanceResult.docs as TeacherAttendanceDoc[]).map((doc) => {
       const teacherId = getRelationId(doc.teacher)
       const teacherDoc = teacherDocs.find((item) => String(item.id) === teacherId)
       return {
-        id: index + 1,
+        id: String(doc.id),
         teacher: teacherDoc?.name || getRelationName(doc.teacher),
         date: toISODate(doc.date),
         entryTime: toHHMM(doc.entryTime),
@@ -1929,7 +1929,7 @@ export async function createTeacherAttendanceAction(
     return {
       ok: true,
       record: {
-        id: 0,
+        id: String(created.id),
         teacher: getRelationName(created.teacher),
         date: toISODate(created.date),
         entryTime: toHHMM(created.entryTime),
@@ -2009,7 +2009,7 @@ export async function updateTeacherAttendanceAction(
     return {
       ok: true,
       record: {
-        id: 0,
+        id: String(verified.id),
         teacher: getRelationName(verified.teacher),
         date: toISODate(verified.date),
         entryTime: toHHMM(verified.entryTime),

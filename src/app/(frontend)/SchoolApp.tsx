@@ -721,7 +721,7 @@ function TeacherCheckIn({
           return;
         }
         setAttendance((current) => [{
-          id: Date.now(),
+          id: result.record.id,
           teacher: result.record.teacher || teacher,
           date: result.record.date,
           entryTime: result.record.entryTime,
