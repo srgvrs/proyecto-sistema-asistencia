@@ -1981,14 +1981,39 @@ export async function updateTeacherAttendanceAction(
       user,
     })
     const updated = doc as TeacherAttendanceDoc
+    if (input.exitTime !== undefined && input.exitTime !== null && !updated.exitTime) {
+      console.error(
+        "UPDATE TEACHER ATTENDANCE NOT PERSISTED",
+        JSON.stringify({ id, requestedExitTime: input.exitTime, storedExitTime: updated.exitTime }, null, 2),
+      )
+      return { ok: false, error: "La salida no se guardó en el servidor. Intenta nuevamente." }
+    }
+    const verified = await payload.findByID({
+      collection: "teacher-attendance",
+      id,
+      depth: 0,
+      overrideAccess: true,
+      user,
+    }) as TeacherAttendanceDoc | null
+    if (!verified) {
+      console.error("UPDATE TEACHER ATTENDANCE VERIFY MISSING", JSON.stringify({ id }, null, 2))
+      return { ok: false, error: "No fue posible confirmar la salida registrada." }
+    }
+    if (input.exitTime !== undefined && input.exitTime !== null && !verified.exitTime) {
+      console.error(
+        "UPDATE TEACHER ATTENDANCE VERIFY MISMATCH",
+        JSON.stringify({ id, requestedExitTime: input.exitTime, storedExitTime: verified.exitTime }, null, 2),
+      )
+      return { ok: false, error: "La salida no se guardó en el servidor. Intenta nuevamente." }
+    }
     return {
       ok: true,
       record: {
         id: 0,
-        teacher: getRelationName(updated.teacher),
-        date: toISODate(updated.date),
-        entryTime: toHHMM(updated.entryTime),
-        exitTime: updated.exitTime ? toHHMM(updated.exitTime) : null,
+        teacher: getRelationName(verified.teacher),
+        date: toISODate(verified.date),
+        entryTime: toHHMM(verified.entryTime),
+        exitTime: verified.exitTime ? toHHMM(verified.exitTime) : null,
       },
     }
   } catch (error: any) {

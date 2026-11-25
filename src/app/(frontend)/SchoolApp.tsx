@@ -692,6 +692,7 @@ function TeacherCheckIn({
   attendance: TeacherAttendance[];
   setAttendance: React.Dispatch<React.SetStateAction<TeacherAttendance[]>>;
 }) {
+  const router = useRouter();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -747,12 +748,17 @@ function TeacherCheckIn({
           setError(result.error);
           return;
         }
+        if (!result.record.exitTime) {
+          setError("La salida no se guardó en el servidor. Intenta nuevamente.");
+          return;
+        }
         setAttendance((current) => current.map((record) =>
           record.id === todayRecord.id
             ? { ...record, exitTime: result.record.exitTime }
             : record,
         ));
         setNotice("Tu salida del plantel fue registrada correctamente.");
+        router.refresh();
       });
     });
   };
