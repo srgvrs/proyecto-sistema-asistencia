@@ -19,7 +19,6 @@ export const SchoolYearClosures: CollectionConfig = {
       name: 'cycleLabel',
       type: 'text',
       required: true,
-      unique: true,
       index: true,
     },
     {

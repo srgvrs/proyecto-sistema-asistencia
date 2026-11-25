@@ -2212,9 +2212,20 @@ type SchoolYearCloseGroupPlan = {
   students: SchoolYearCloseStudentPlan[]
 }
 
+type SchoolYearClosePreviousClosure = {
+  id: string
+  closedAt: string
+  closedBy: string
+  promoted: number
+  graduated: number
+  createdGroups: number
+  errorCount: number
+}
+
 type SchoolYearClosePreview = {
   groups: SchoolYearCloseGroupPlan[]
   warnings: string[]
+  previousClosures: SchoolYearClosePreviousClosure[]
   totals: {
     promoted: number
     graduated: number
@@ -2261,6 +2272,15 @@ export async function previewSchoolYearCloseAction(
       overrideAccess: false,
       user,
     })
+    const previousClosuresResult = await payload.find({
+      collection: "school-year-closures",
+      where: { cycleLabel: { equals: getCycleLabel(todayISO()) } },
+      limit: 50,
+      sort: "-closedAt",
+      depth: 1,
+      overrideAccess: false,
+      user,
+    })
 
     const groupDocs = groupsResult.docs as GroupDoc[]
     const studentDocs = studentsResult.docs as StudentDoc[]
@@ -2272,6 +2292,20 @@ export async function previewSchoolYearCloseAction(
     for (const doc of studentDocs) {
       if (doc.matricula) matriculaOwners.set(doc.matricula, String(doc.id))
     }
+
+    const previousClosures: SchoolYearClosePreviousClosure[] = (previousClosuresResult.docs as any[]).map((doc) => {
+      const closedBy = doc.closedBy && typeof doc.closedBy === "object" ? doc.closedBy : null
+      const errors = Array.isArray(doc.errors) ? doc.errors : []
+      return {
+        id: String(doc.id),
+        closedAt: typeof doc.closedAt === "string" ? doc.closedAt : "",
+        closedBy: closedBy?.name ?? closedBy?.email ?? "Usuario desconocido",
+        promoted: Number(doc.promoted ?? 0),
+        graduated: Number(doc.graduated ?? 0),
+        createdGroups: Number(doc.createdGroups ?? 0),
+        errorCount: errors.length,
+      }
+    })
 
     const warnings: string[] = []
     const groups: SchoolYearCloseGroupPlan[] = []
@@ -2397,6 +2431,7 @@ export async function previewSchoolYearCloseAction(
       preview: {
         groups,
         warnings,
+        previousClosures,
         totals: {
           promoted,
           graduated,
@@ -2434,6 +2469,7 @@ type CloseSchoolYearResult =
 type SchoolYearClosureDoc = {
   id: number
   cycleLabel: string
+  closedAt?: string | null
 }
 
 export async function closeSchoolYearAction(
@@ -2444,10 +2480,6 @@ export async function closeSchoolYearAction(
   if (!user || user.role !== "Directivo") {
     console.log("[CIERRE] exit#1 rol", { hasUser: !!user, role: user?.role })
     return { ok: false, error: "Solo un directivo puede cerrar el ciclo escolar.", ...emptyResult }
-  }
-  if (input?.confirmText !== "CERRAR CICLO") {
-    console.log("[CIERRE] exit#2 confirmText", { confirmText: input?.confirmText })
-    return { ok: false, error: "Debes escribir CERRAR CICLO para confirmar.", ...emptyResult }
   }
   const rawExcluded = Array.isArray(input?.excludedStudentIds) ? input.excludedStudentIds : []
   if (rawExcluded.length > 5000 || !rawExcluded.every((id) => isString(id))) {
@@ -2489,16 +2521,27 @@ export async function closeSchoolYearAction(
     const existing = await payload.find({
       collection: "school-year-closures",
       where: { cycleLabel: { equals: cycleLabel } },
-      limit: 1,
+      limit: 50,
+      sort: "-closedAt",
       depth: 0,
       overrideAccess: false,
       user,
     })
-    if (existing.docs.length > 0) {
-      console.log("[CIERRE] exit#7 ciclo ya cerrado", { cycleLabel, closureId: existing.docs[0]?.id })
+    const hasPreviousClosures = existing.docs.length > 0
+    const expectedConfirmText = hasPreviousClosures ? "CERRAR OTRA VEZ" : "CERRAR CICLO"
+    if (input?.confirmText !== expectedConfirmText) {
+      console.log("[CIERRE] exit#2 confirmText", { confirmText: input?.confirmText, expectedConfirmText })
+      return { ok: false, error: `Debes escribir ${expectedConfirmText} para confirmar.`, ...emptyResult }
+    }
+    const recentClosure = (existing.docs as SchoolYearClosureDoc[]).find((doc) => {
+      const closedAt = typeof doc.closedAt === "string" ? new Date(doc.closedAt).valueOf() : NaN
+      return Number.isFinite(closedAt) && Date.now() - closedAt < 2 * 60 * 1000
+    })
+    if (recentClosure) {
+      console.log("[CIERRE] exit#7 cierre reciente", { cycleLabel, closureId: recentClosure.id })
       return {
         ok: false,
-        error: `El ciclo ${cycleLabel} ya fue cerrado.`,
+        error: "Ya se ejecutó un cierre hace unos momentos. Espera antes de intentarlo otra vez.",
         ...emptyResult,
       }
     }

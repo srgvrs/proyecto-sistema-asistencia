@@ -3205,6 +3205,9 @@ function SchoolYearClose({
   const executed = result?.ok === true;
   const advancingCount = preview ? preview.totals.promoted + preview.totals.graduated : 0;
   const excludedCount = preview?.totals.excluded ?? 0;
+  const previousClosures = preview?.previousClosures ?? [];
+  const latestClosure = previousClosures[0] ?? null;
+  const expectedConfirmText = previousClosures.length > 0 ? "CERRAR OTRA VEZ" : "CERRAR CICLO";
   const groupsWithoutTeacher = useMemo(() => {
     if (!executed) return [];
     const assigned = new Set(Object.values(teacherGroups).flat());
@@ -3270,8 +3273,8 @@ function SchoolYearClose({
 
   const runClose = () => {
     if (confirmPendingRef.current) return;
-    if (confirmText !== "CERRAR CICLO") {
-      setConfirmError("Escribe exactamente CERRAR CICLO para continuar.");
+    if (confirmText !== expectedConfirmText) {
+      setConfirmError(`Escribe exactamente ${expectedConfirmText} para continuar.`);
       return;
     }
     confirmPendingRef.current = true;
@@ -3354,6 +3357,16 @@ function SchoolYearClose({
       {preview && preview.warnings.length > 0 && (
         <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>Avisos</strong>{preview.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div></div>
       )}
+      {latestClosure && (
+        <div className="notice notice-error catalog-notice" role="note">
+          <Icon name="alert" />
+          <div>
+            <strong>Este ciclo ya fue cerrado {previousClosures.length === 1 ? "una vez" : `${previousClosures.length} veces`}</strong>
+            <p>Último cierre: {latestClosure.closedAt ? formatDate(latestClosure.closedAt.slice(0, 10)) : "fecha desconocida"} · {latestClosure.closedBy} · {latestClosure.promoted} promovidos · {latestClosure.graduated} egresados · {latestClosure.createdGroups} grupos creados{latestClosure.errorCount > 0 ? ` · ${latestClosure.errorCount} ${latestClosure.errorCount === 1 ? "error" : "errores"}` : ""}.</p>
+            <p>Si vuelves a cerrar el ciclo, los alumnos activos subirán otro grado y los de sexto volverán a egresar. Verifica la vista previa antes de continuar.</p>
+          </div>
+        </div>
+      )}
       {preview && (
         <>
           <section className="notice notice-error catalog-notice" role="note">
@@ -3419,12 +3432,12 @@ function SchoolYearClose({
                 Se promoverán <strong>{preview.totals.promoted}</strong> alumnos, egresarán <strong>{preview.totals.graduated}</strong> y se crearán <strong>{preview.totals.groupsToCreate}</strong> grupos. Esta acción no se puede deshacer.
               </p>
               <label>
-                Escribe <strong>CERRAR CICLO</strong> para confirmar
+                Escribe <strong>{expectedConfirmText}</strong> para confirmar
                 <input
                   ref={confirmInputRef}
                   value={confirmText}
                   onChange={(event) => { setConfirmText(event.target.value); setConfirmError(""); }}
-                  placeholder="CERRAR CICLO"
+                  placeholder={expectedConfirmText}
                   autoComplete="off"
                   disabled={confirmPending}
                   style={{ border: "1px solid #1f2937", color: "#111827", background: "#ffffff", padding: "0.5rem 0.75rem", borderRadius: "0.375rem", width: "100%" }}
@@ -3434,7 +3447,7 @@ function SchoolYearClose({
             </div>
             <div className="confirmation-actions">
               <button ref={confirmCancelRef} className="secondary-button" type="button" onClick={closeConfirm} disabled={confirmPending}>Cancelar</button>
-              <button className="danger-confirm-button" type="button" onClick={runClose} disabled={confirmPending || confirmText !== "CERRAR CICLO"} aria-busy={confirmPending}>
+              <button className="danger-confirm-button" type="button" onClick={runClose} disabled={confirmPending || confirmText !== expectedConfirmText} aria-busy={confirmPending}>
                 {confirmPending ? "Procesando…" : "Sí, cerrar ciclo"}
               </button>
             </div>
