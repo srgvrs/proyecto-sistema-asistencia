@@ -1946,6 +1946,7 @@ export async function updateTeacherAttendanceAction(
   id: string,
   input: { exitTime?: string | null },
 ): Promise<{ ok: true; record: TeacherAttendance } | { ok: false; error: string }> {
+  console.log("[SALIDA] updateTeacherAttendanceAction called", { id, input })
   const user = await appAuth.currentUser()
   if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para actualizar asistencia docente." }
@@ -1969,6 +1970,15 @@ export async function updateTeacherAttendanceAction(
         overrideAccess: true,
         user,
       }) as TeacherAttendanceDoc | null
+      console.log("[SALIDA] existing doc", {
+        id,
+        found: Boolean(existing),
+        docId: existing?.id,
+        teacher: existing ? getRelationId(existing.teacher) : null,
+        date: existing ? toISODate(existing.date) : null,
+        todayISO: todayISO(),
+        userId: String(user.id),
+      })
       if (!existing || getRelationId(existing.teacher) !== String(user.id)) {
         return { ok: false, error: "No tienes permiso sobre este registro." }
       }
@@ -1984,6 +1994,13 @@ export async function updateTeacherAttendanceAction(
       user,
     })
     const updated = doc as TeacherAttendanceDoc
+    console.log("[SALIDA] update result", {
+      id,
+      updatedId: updated.id,
+      teacher: getRelationId(updated.teacher),
+      date: toISODate(updated.date),
+      exitTime: updated.exitTime,
+    })
     if (input.exitTime !== undefined && input.exitTime !== null && !updated.exitTime) {
       console.error(
         "UPDATE TEACHER ATTENDANCE NOT PERSISTED",
@@ -2009,6 +2026,13 @@ export async function updateTeacherAttendanceAction(
       )
       return { ok: false, error: "La salida no se guardó en el servidor. Intenta nuevamente." }
     }
+    console.log("[SALIDA] verified doc", {
+      id,
+      verifiedId: verified.id,
+      teacher: getRelationId(verified.teacher),
+      date: toISODate(verified.date),
+      exitTime: verified.exitTime,
+    })
     return {
       ok: true,
       record: {
