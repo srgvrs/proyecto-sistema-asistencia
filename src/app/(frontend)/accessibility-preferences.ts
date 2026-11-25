@@ -33,8 +33,6 @@ export const readPreferences = (): AccessibilityPreferences => {
     const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
     if (isTheme(storedTheme)) {
       theme = storedTheme
-    } else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
-      theme = "dark"
     }
   } catch {
     // localStorage may be unavailable (private mode, blocked storage).
@@ -59,4 +57,4 @@ export const savePreferences = (preferences: AccessibilityPreferences): void => 
   }
 }
 
-export const PRE_HYDRATION_SCRIPT = `(function(){try{var d=document.documentElement;var fs=localStorage.getItem("${FONT_SIZE_STORAGE_KEY}");var th=localStorage.getItem("${THEME_STORAGE_KEY}");if(fs!=="normal"&&fs!=="large"&&fs!=="xlarge"){fs="normal";}if(th!=="light"&&th!=="dark"){th=(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";}d.dataset.fontSize=fs;d.dataset.theme=th;}catch(e){document.documentElement.dataset.fontSize="normal";document.documentElement.dataset.theme="light";}})();`
+export const PRE_HYDRATION_SCRIPT = `(function(){try{var d=document.documentElement;var fs=localStorage.getItem("${FONT_SIZE_STORAGE_KEY}");var th=localStorage.getItem("${THEME_STORAGE_KEY}");if(fs!=="normal"&&fs!=="large"&&fs!=="xlarge"){fs="normal";}if(th!=="light"&&th!=="dark"){th="light";}d.dataset.fontSize=fs;d.dataset.theme=th;}catch(e){document.documentElement.dataset.fontSize="normal";document.documentElement.dataset.theme="light";}})();`
