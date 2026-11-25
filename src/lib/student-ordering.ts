@@ -2,15 +2,18 @@ import type { Student } from "./school-data-types"
 
 const collator = new Intl.Collator("es", { sensitivity: "base" })
 
+const cleanNamePart = (value: string | null | undefined): string =>
+  (value ?? "").trim().replace(/\s+/g, " ")
+
 const nameParts = (student: Student) => {
   if (student.paternalSurname !== undefined || student.maternalSurname !== undefined || student.givenNames !== undefined) {
     return {
-      paternalSurname: student.paternalSurname ?? "",
-      maternalSurname: student.maternalSurname ?? "",
-      givenNames: student.givenNames ?? "",
+      paternalSurname: cleanNamePart(student.paternalSurname),
+      maternalSurname: cleanNamePart(student.maternalSurname),
+      givenNames: cleanNamePart(student.givenNames),
     }
   }
-  const parts = student.name.trim().split(/\s+/)
+  const parts = cleanNamePart(student.name).split(" ").filter(Boolean)
   return {
     paternalSurname: parts.length >= 3 ? parts[parts.length - 2] : parts.at(-1) || "",
     maternalSurname: parts.length >= 3 ? parts.at(-1) || "" : "",
@@ -18,15 +21,22 @@ const nameParts = (student: Student) => {
   }
 }
 
-export const compareStudentsAlphabetically = (a: Student, b: Student): number => {
+/**
+ * Single source of truth for ordering students: paternal surname, then
+ * maternal surname, then given names. Uses `localeCompare("es", { sensitivity: "base" })`
+ * so accents and letter case are ignored, and trims/collapses whitespace.
+ */
+export const compareStudentsByName = (a: Student, b: Student): number => {
   const aName = nameParts(a)
   const bName = nameParts(b)
   return (
-    collator.compare(aName.paternalSurname, bName.paternalSurname) ||
-    collator.compare(aName.maternalSurname, bName.maternalSurname) ||
-    collator.compare(aName.givenNames, bName.givenNames)
+    aName.paternalSurname.localeCompare(bName.paternalSurname, "es", { sensitivity: "base" }) ||
+    aName.maternalSurname.localeCompare(bName.maternalSurname, "es", { sensitivity: "base" }) ||
+    aName.givenNames.localeCompare(bName.givenNames, "es", { sensitivity: "base" })
   )
 }
+
+export const compareStudentsAlphabetically = compareStudentsByName
 
 /**
  * Sorts students alphabetically (paternal, maternal, given names) and assigns
@@ -43,7 +53,7 @@ export const sortAndNumberStudents = (students: Student[]): Student[] => {
   for (const groupStudents of byGroup.values()) {
     groupStudents
       .slice()
-      .sort(compareStudentsAlphabetically)
+      .sort(compareStudentsByName)
       .forEach((student, index) => {
         numbered.push({ ...student, listNumber: index + 1 })
       })
@@ -55,5 +65,5 @@ export const sortAndNumberGroupStudents = (students: Student[], group: string): 
   students
     .filter((student) => student.group === group)
     .slice()
-    .sort(compareStudentsAlphabetically)
+    .sort(compareStudentsByName)
     .map((student, index) => ({ ...student, listNumber: index + 1 }))

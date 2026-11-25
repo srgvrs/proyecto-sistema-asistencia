@@ -32,7 +32,7 @@ import {
 import type { AppUserSummary, Role } from "@/lib/app-user-types";
 import { todayISO } from "@/lib/school-data-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
-import { compareStudentsAlphabetically, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
+import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
@@ -58,7 +58,7 @@ const getStudentNameParts = (student: Student) => {
   };
 };
 
-const compareStudentsByPaternalSurname = compareStudentsAlphabetically;
+const compareStudentsByPaternalSurname = compareStudentsByName;
 
 const isActiveStudent = (student: Student) => student.status !== "Egresado";
 

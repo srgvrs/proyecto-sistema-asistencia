@@ -3,6 +3,7 @@
 import config from "@payload-config"
 import { getPayload } from "payload"
 import { appAuth } from "@/lib/app-auth"
+import { compareStudentsByName } from "@/lib/student-ordering"
 import type {
   AttendanceRecord,
   OfficialAttendanceList,
@@ -437,14 +438,7 @@ const parseRoster = (value: unknown): OfficialAttendanceStudent[] | null => {
 const buildRosterFromStudents = (students: Student[]): OfficialAttendanceStudent[] =>
   students
     .slice()
-    .sort((a, b) => {
-      const options = { sensitivity: "base" as const }
-      return (
-        (a.paternalSurname ?? "").localeCompare(b.paternalSurname ?? "", "es-MX", options) ||
-        (a.maternalSurname ?? "").localeCompare(b.maternalSurname ?? "", "es-MX", options) ||
-        (a.givenNames ?? "").localeCompare(b.givenNames ?? "", "es-MX", options)
-      )
-    })
+    .sort(compareStudentsByName)
     .map((student, index) => ({
       studentId: student.id,
       name: student.name,
@@ -2316,16 +2310,10 @@ export async function previewSchoolYearCloseAction(
       const groupStudents = (studentsByGroupId.get(String(group.id)) || [])
         .filter((doc) => (doc.status ?? "Activo") === "Activo")
         .slice()
-        .sort((a, b) => {
-          const partsA = resolveStudentNameParts(a)
-          const partsB = resolveStudentNameParts(b)
-          const options = { sensitivity: "base" as const }
-          return (
-            partsA.paternalSurname.localeCompare(partsB.paternalSurname, "es-MX", options) ||
-            partsA.maternalSurname.localeCompare(partsB.maternalSurname, "es-MX", options) ||
-            partsA.givenNames.localeCompare(partsB.givenNames, "es-MX", options)
-          )
-        })
+        .sort((a, b) => compareStudentsByName(
+          { ...mapStudentDoc(a, 0), group: group.name },
+          { ...mapStudentDoc(b, 0), group: group.name },
+        ))
 
       const studentPlans: SchoolYearCloseStudentPlan[] = []
       for (const doc of groupStudents) {
@@ -2588,16 +2576,10 @@ export async function closeSchoolYearAction(
         .filter((doc) => (doc.status ?? "Activo") === "Activo")
         .filter((doc) => !excludedIds.has(String(doc.id)))
         .slice()
-        .sort((a, b) => {
-          const partsA = resolveStudentNameParts(a)
-          const partsB = resolveStudentNameParts(b)
-          const options = { sensitivity: "base" as const }
-          return (
-            partsA.paternalSurname.localeCompare(partsB.paternalSurname, "es-MX", options) ||
-            partsA.maternalSurname.localeCompare(partsB.maternalSurname, "es-MX", options) ||
-            partsA.givenNames.localeCompare(partsB.givenNames, "es-MX", options)
-          )
-        })
+        .sort((a, b) => compareStudentsByName(
+          { ...mapStudentDoc(a, 0), group: group.name },
+          { ...mapStudentDoc(b, 0), group: group.name },
+        ))
 
       const plannedStudents: PlannedStudent[] = []
       for (const doc of groupStudents) {
