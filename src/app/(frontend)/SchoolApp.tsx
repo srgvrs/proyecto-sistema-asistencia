@@ -3159,9 +3159,20 @@ type SchoolYearCloseGroupPlan = {
   students: SchoolYearCloseStudentPlan[];
 };
 
+type SchoolYearClosePreviousClosure = {
+  id: string;
+  closedAt: string;
+  closedBy: string;
+  promoted: number;
+  graduated: number;
+  createdGroups: number;
+  errorCount: number;
+};
+
 type SchoolYearClosePreview = {
   groups: SchoolYearCloseGroupPlan[];
   warnings: string[];
+  previousClosures: SchoolYearClosePreviousClosure[];
   totals: {
     promoted: number;
     graduated: number;
