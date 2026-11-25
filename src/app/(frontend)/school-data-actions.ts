@@ -1972,6 +1972,9 @@ export async function updateTeacherAttendanceAction(
       if (!existing || getRelationId(existing.teacher) !== String(user.id)) {
         return { ok: false, error: "No tienes permiso sobre este registro." }
       }
+      if (toISODate(existing.date) !== todayISO()) {
+        return { ok: false, error: "Ese registro no corresponde al día de hoy." }
+      }
     }
     const doc = await payload.update({
       collection: "teacher-attendance",

@@ -753,7 +753,7 @@ function TeacherCheckIn({
           return;
         }
         setAttendance((current) => current.map((record) =>
-          record.id === todayRecord.id
+          record.teacher === teacher && record.date === today
             ? { ...record, exitTime: result.record.exitTime }
             : record,
         ));
