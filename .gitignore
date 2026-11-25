@@ -1,0 +1,45 @@
+# Dependencias y build
+node_modules/
+.next/
+out/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+next-env.d.ts
+
+# Secretos y variables de entorno
+.env
+.env*
+!.env.example
+
+# Base de datos local (datos reales de alumnos y usuarios)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Entorno virtual de Python
+venv/
+.venv/
+
+# Logs, temporales y backups
+logs/
+*.log
+*-debug.log*
+*.bak
+.tmp-*
+
+# Herramientas de IA, agentes y plataforma
+.aider*
+.claude-replay.*
+.figma/runtime/
+/.figma/design-context/
+/.plugins/
+/.opencode-skills/
+
+# Sistema operativo y editor
+.DS_Store
+Thumbs.db
+.vscode/

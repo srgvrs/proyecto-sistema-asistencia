@@ -1,0 +1,6 @@
+ESCUELA PRIMARIA VICENTE SUÁREZ
+Reporte de asistencia,Fecha,{{fecha}}
+Alumnos incluidos,{{total_alumnos}}
+
+Alumno,Grupo,Puntuales,Retardos,Faltas
+{{alumno}},{{grupo}},{{puntuales}},{{retardos}},{{faltas}}
