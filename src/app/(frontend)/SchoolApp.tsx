@@ -3203,6 +3203,8 @@ function SchoolYearClose({
   const confirmPendingRef = useRef(false);
   const [confirmPending, setConfirmPending] = useState(false);
   const executed = result?.ok === true;
+  const advancingCount = preview ? preview.totals.promoted + preview.totals.graduated : 0;
+  const excludedCount = preview?.totals.excluded ?? 0;
   const groupsWithoutTeacher = useMemo(() => {
     if (!executed) return [];
     const assigned = new Set(Object.values(teacherGroups).flat());
@@ -3306,12 +3308,20 @@ function SchoolYearClose({
         <div className="student-counter"><span>{preview?.totals.promoted ?? 0}</span><div><small>ALUMNOS QUE SUBEN</small><strong>{preview?.totals.graduated ?? 0} egresan · {preview?.totals.excluded ?? 0} excluidos</strong></div></div>
       </div>
       {error && <div className="notice notice-error catalog-notice"><Icon name="alert" /><div><strong>No se pudo generar la vista previa</strong><p>{error}</p></div></div>}
-      {result && (
-        <div className={`notice ${result.ok ? "notice-success" : "notice-error"} catalog-notice`}>
-          <Icon name={result.ok ? "check" : "alert"} />
+      {result && !result.ok && (
+        <div className="notice notice-error catalog-notice" role="alert">
+          <Icon name="alert" />
           <div>
-            <strong>{result.ok ? "Cierre de ciclo ejecutado" : "No se pudo ejecutar el cierre"}</strong>
-            {result.error && <p>{result.error}</p>}
+            <strong>No se pudo ejecutar el cierre</strong>
+            <p>{result.error || "No fue posible completar el cierre de ciclo."}</p>
+          </div>
+        </div>
+      )}
+      {result && result.ok && (
+        <div className="notice notice-success catalog-notice" role="status">
+          <Icon name="check" />
+          <div>
+            <strong>Cierre de ciclo ejecutado</strong>
             <p>{result.promoted} promovidos · {result.graduated} egresados · {result.createdGroups} grupos creados</p>
             {result.errors.length > 0 && result.errors.map((message) => <p key={message}>{message}</p>)}
           </div>
@@ -3346,6 +3356,13 @@ function SchoolYearClose({
       )}
       {preview && (
         <>
+          <section className="notice notice-error catalog-notice" role="note">
+            <Icon name="alert" />
+            <div>
+              <strong>Antes de cerrar el ciclo, revisa quién NO avanza</strong>
+              <p>Todos los alumnos pasarán automáticamente al siguiente grado y los de sexto egresarán. Si algún alumno repite el grado o se dio de baja, marca su casilla: quedará excluido y conservará su grupo actual. Si todos avanzan, no marques ninguna casilla y presiona «Cerrar ciclo escolar».</p>
+            </div>
+          </section>
           <div className="attendance-report-metrics">
             <div className="attendance-report-metric attended"><span><Icon name="check" /></span><div><small>SUBEN DE GRADO</small><strong>{preview.totals.promoted}</strong><p>Alumnos activos</p></div></div>
             <div className="attendance-report-metric present"><span><Icon name="badge" /></span><div><small>EGRESAN</small><strong>{preview.totals.graduated}</strong><p>Alumnos de sexto</p></div></div>
@@ -3385,6 +3402,7 @@ function SchoolYearClose({
       <div className="roll-footer">
         <p><Icon name="alert" size={18} /> {executed ? "El cierre de ciclo ya fue ejecutado." : "Al ejecutar el cierre se moverán los alumnos y se egresará a sexto grado."}</p>
         <div>
+          <span className="group-badge" aria-live="polite">{advancingCount} alumnos avanzan · {excludedCount} excluidos</span>
           <button className="primary-button" type="button" onClick={openConfirm} disabled={executed || isPending || !preview}>
             {executed ? "Ciclo cerrado" : isPending ? "Procesando…" : "Ejecutar cierre de ciclo"}
           </button>
@@ -3409,6 +3427,7 @@ function SchoolYearClose({
                   placeholder="CERRAR CICLO"
                   autoComplete="off"
                   disabled={confirmPending}
+                  style={{ border: "1px solid #1f2937", color: "#111827", background: "#ffffff", padding: "0.5rem 0.75rem", borderRadius: "0.375rem", width: "100%" }}
                 />
               </label>
               {confirmError && <p className="form-alert"><Icon name="alert" size={16} /><span>{confirmError}</span></p>}
