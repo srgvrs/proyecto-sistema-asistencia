@@ -2454,19 +2454,23 @@ export async function closeSchoolYearAction(
   const emptyResult = { promoted: 0, graduated: 0, createdGroups: 0, errors: [] as string[] }
   const user = await appAuth.currentUser()
   if (!user || user.role !== "Directivo") {
+    console.log("[CIERRE] exit#1 rol", { hasUser: !!user, role: user?.role })
     return { ok: false, error: "Solo un directivo puede cerrar el ciclo escolar.", ...emptyResult }
   }
   if (input?.confirmText !== "CERRAR CICLO") {
+    console.log("[CIERRE] exit#2 confirmText", { confirmText: input?.confirmText })
     return { ok: false, error: "Debes escribir CERRAR CICLO para confirmar.", ...emptyResult }
   }
   const rawExcluded = Array.isArray(input?.excludedStudentIds) ? input.excludedStudentIds : []
   if (rawExcluded.length > 5000 || !rawExcluded.every((id) => isString(id))) {
+    console.log("[CIERRE] exit#3 excluded shape", { length: rawExcluded.length })
     return { ok: false, error: "La lista de alumnos excluidos no es válida.", ...emptyResult }
   }
   const excludedIds = new Set<string>()
   for (const id of rawExcluded) {
     const numeric = Number(id)
     if (!Number.isInteger(numeric) || numeric <= 0) {
+      console.log("[CIERRE] exit#4 excluded id inválido", { id })
       return { ok: false, error: "La lista de alumnos excluidos no es válida.", ...emptyResult }
     }
     excludedIds.add(String(numeric))
@@ -2474,6 +2478,7 @@ export async function closeSchoolYearAction(
 
   const cycleLabel = getCycleLabel(todayISO())
   if (!cycleLabel) {
+    console.log("[CIERRE] exit#5 cycleLabel vacío", { today: todayISO() })
     return { ok: false, error: "No fue posible determinar el ciclo escolar actual.", ...emptyResult }
   }
 
@@ -2485,6 +2490,7 @@ export async function closeSchoolYearAction(
       "CLOSE SCHOOL YEAR PAYLOAD ERROR",
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
+    console.log("[CIERRE] exit#6 payload error")
     return { ok: false, error: "No fue posible iniciar el cierre de ciclo.", ...emptyResult }
   }
 
@@ -2501,6 +2507,7 @@ export async function closeSchoolYearAction(
       user,
     })
     if (existing.docs.length > 0) {
+      console.log("[CIERRE] exit#7 ciclo ya cerrado", { cycleLabel, closureId: existing.docs[0]?.id })
       return {
         ok: false,
         error: `El ciclo ${cycleLabel} ya fue cerrado.`,
@@ -2635,6 +2642,27 @@ export async function closeSchoolYearAction(
         students: plannedStudents,
       })
     }
+
+    const activeStudents = studentDocs.filter((doc) => (doc.status ?? "Activo") === "Activo")
+    const activeAfterExclusion = activeStudents.filter((doc) => !excludedIds.has(String(doc.id)))
+    console.log("[CIERRE] plan calculado", {
+      cycleLabel,
+      alreadyClosed: false,
+      activeStudents: activeStudents.length,
+      activeAfterExclusion: activeAfterExclusion.length,
+      excludedIds: [...excludedIds],
+      groupsInPlan: plan.length,
+      warnings,
+      students: plan.flatMap((plannedGroup) =>
+        plannedGroup.students.map((planned) => ({
+          id: String(planned.doc.id),
+          currentGroup: plannedGroup.group.name,
+          destination: planned.destinationGroupName,
+          nextMatricula: planned.nextMatricula,
+          isGraduating: planned.isGraduating,
+        })),
+      ),
+    })
 
     // Create the closure record BEFORE moving any student so two rapid clicks
     // cannot both proceed. If anything fails before the first student is moved,
@@ -2799,6 +2827,7 @@ export async function closeSchoolYearAction(
         )
       }
     }
+    console.log("[CIERRE] exit#8 throw inesperado", { closureId, studentsMoved })
     return {
       ok: false,
       error: "No fue posible completar el cierre de ciclo.",
