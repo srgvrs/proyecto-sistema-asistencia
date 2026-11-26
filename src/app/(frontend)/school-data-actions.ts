@@ -2267,13 +2267,11 @@ export async function authorizeVisitorAction(
     const currentStatus = existing.authorizationStatus === "Autorizada" || existing.authorizationStatus === "Rechazada"
       ? existing.authorizationStatus
       : "Pendiente"
-    if (user.role === "Docente") {
-      if (getRelationId(existing.hostUser) !== String(user.id)) {
-        return { ok: false, error: "Solo puedes autorizar las visitas dirigidas a ti." }
-      }
-      if (currentStatus !== "Pendiente") {
-        return { ok: false, error: "Esta visita ya fue autorizada o rechazada." }
-      }
+    if (currentStatus !== "Pendiente") {
+      return { ok: false, error: "Esta visita ya fue resuelta." }
+    }
+    if (user.role === "Docente" && getRelationId(existing.hostUser) !== String(user.id)) {
+      return { ok: false, error: "Solo puedes autorizar las visitas dirigidas a ti." }
     }
     const doc = await payload.update({
       collection: "visitors",

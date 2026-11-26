@@ -1149,14 +1149,16 @@ function VisitorRegistry({
           return;
         }
         setVisitors((current) => current.map((item) => item.id === result.visitor.id ? { ...item, ...result.visitor } : item));
+        setNotice({ type: "success", text: decision === "Autorizada" ? "La visita fue autorizada." : "La visita fue rechazada." });
       });
     });
   };
 
   const canAuthorizeVisitor = (visitor: Visitor) => {
     if (!canAuthorize) return false;
+    if (visitor.authorizationStatus !== "Pendiente") return false;
     if (currentUserRole === "Directivo") return true;
-    return visitor.hostUserId === currentUserId && visitor.authorizationStatus === "Pendiente";
+    return visitor.hostUserId === currentUserId;
   };
 
   const handleDeleteVisitor = (visitor: Visitor) => {
