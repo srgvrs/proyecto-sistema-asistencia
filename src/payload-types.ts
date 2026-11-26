@@ -116,8 +116,12 @@ export interface Config {
     defaultIDType: number;
   };
   fallbackLocale: ('false' | 'none' | 'null') | false | null | 'en' | 'en'[];
-  globals: {};
-  globalsSelect: {};
+  globals: {
+    'school-settings': SchoolSetting;
+  };
+  globalsSelect: {
+    'school-settings': SchoolSettingsSelect<false> | SchoolSettingsSelect<true>;
+  };
   locale: 'en';
   widgets: {
     welcome: WelcomeWidget;
@@ -222,6 +226,10 @@ export interface User {
    * Solo aplica a docentes. Los directivos y vigilantes permanecen como Activo.
    */
   employmentStatus?: ('Activo' | 'Baja temporal') | null;
+  /**
+   * Si se desactiva, el usuario no podrá iniciar sesión ni operar en el sistema.
+   */
+  active?: boolean | null;
   createdBy?:
     | ({
         relationTo: 'admins';
@@ -525,6 +533,18 @@ export interface Visitor {
   reason: string;
   entryTime: string;
   exitTime?: string | null;
+  host?: string | null;
+  /**
+   * Permite al docente consultar y autorizar solo sus propias visitas.
+   */
+  hostUser?: (number | null) | User;
+  /**
+   * Lo fija el servidor. El vigilante no puede modificarlo.
+   */
+  authorizationStatus?: ('Pendiente' | 'Autorizada' | 'Rechazada') | null;
+  authorizedBy?: (number | null) | User;
+  authorizedByName?: string | null;
+  authorizedAt?: string | null;
   registeredBy: number | User;
   createdBy?:
     | ({
@@ -1035,6 +1055,7 @@ export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
   employmentStatus?: T;
+  active?: T;
   createdBy?: T;
   updatedBy?: T;
   updatedAt?: T;
@@ -1110,6 +1131,12 @@ export interface VisitorsSelect<T extends boolean = true> {
   reason?: T;
   entryTime?: T;
   exitTime?: T;
+  host?: T;
+  hostUser?: T;
+  authorizationStatus?: T;
+  authorizedBy?: T;
+  authorizedByName?: T;
+  authorizedAt?: T;
   registeredBy?: T;
   createdBy?: T;
   updatedBy?: T;
@@ -1249,6 +1276,51 @@ export interface PayloadLlmInstructionsSelect<T extends boolean = true> {
   updatedBy?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * Datos institucionales que aparecen en pantallas y documentos oficiales.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "school-settings".
+ */
+export interface SchoolSetting {
+  id: number;
+  /**
+   * Se muestra en las listas oficiales y en los PDF generados.
+   */
+  directorName?: string | null;
+  createdBy?:
+    | ({
+        relationTo: 'admins';
+        value: number | Admin;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: number | User;
+      } | null);
+  updatedBy?:
+    | ({
+        relationTo: 'admins';
+        value: number | Admin;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: number | User;
+      } | null);
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "school-settings_select".
+ */
+export interface SchoolSettingsSelect<T extends boolean = true> {
+  directorName?: T;
+  createdBy?: T;
+  updatedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
