@@ -511,7 +511,11 @@ function App({
           {view === "inicio" && <Dashboard userName={session.name} role={session.role} records={records} students={students} visitors={visitors} assignedGroups={teacherGroups[session.name] || []} onNavigate={navigate} />}
           {view === "visitantes" && (
             <>
-              {session.role === "Directivo" && <DateRangeFilter initial={initialDateRange} />}
+              {session.role === "Directivo" && (
+                <div className="view-header-row">
+                  <DateRangeFilter initial={initialDateRange} />
+                </div>
+              )}
               {rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
               <VisitorRegistry
                 visitors={session.role === "Directivo" && rangeData ? rangeData.visitors : visitors}
@@ -539,7 +543,9 @@ function App({
           )}
           {view === "listas-oficiales" && session.role === "Directivo" && (
             <>
-              <DateRangeFilter initial={initialDateRange} />
+              <div className="view-header-row">
+                <DateRangeFilter initial={initialDateRange} />
+              </div>
               <OfficialListsArchive
                 officialLists={officialLists}
                 groups={groups.map((group) => group.name)}
@@ -569,7 +575,9 @@ function App({
           )}
           {view === "docentes" && session.role === "Directivo" && (
             <>
-              <DateRangeFilter initial={initialDateRange} />
+              <div className="view-header-row">
+                <DateRangeFilter initial={initialDateRange} />
+              </div>
               {rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
               <TeacherAttendanceOverview
                 attendance={session.role === "Directivo" && rangeData ? rangeData.teacherAttendance : teacherAttendance}
@@ -632,7 +640,11 @@ function App({
           )}
           {view === "reportes" && session.role !== "Vigilante de Acceso" && (
             <>
-              {session.role === "Directivo" && <DateRangeFilter initial={initialDateRange} />}
+              {session.role === "Directivo" && (
+                <div className="view-header-row">
+                  <DateRangeFilter initial={initialDateRange} />
+                </div>
+              )}
               {session.role === "Directivo" && rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
               <Reports
                 records={session.role === "Directivo" && rangeData ? rangeData.attendance : records}

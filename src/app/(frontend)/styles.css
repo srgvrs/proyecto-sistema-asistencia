@@ -207,6 +207,33 @@ h1, h2, h3, .brand strong { font-family: ui-sans-serif, system-ui, -apple-system
 .page-intro h1 { color: var(--color-heading); font-size: clamp(25px, 3vw, 34px); letter-spacing: -.035em; line-height: 1.15; }
 .page-intro > div:first-child > p:last-child { color: var(--color-text-muted); font-size: 13px; margin-top: 8px; }
 .date-pill, .cutoff { display: flex; align-items: center; gap: 9px; background: var(--color-chip-bg); color: var(--color-text-secondary); border: 1px solid var(--color-chip-border); border-radius: 9px; padding: 10px 13px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.view-header-row { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 16px; }
+.date-range-filter { position: relative; display: inline-flex; justify-content: flex-end; margin-left: auto; }
+.date-range-trigger { display: inline-flex; align-items: center; gap: 9px; color: var(--color-text-secondary); background: var(--color-chip-bg); border: 1px solid var(--color-chip-border); border-radius: 9px; padding: 9px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.date-range-trigger:hover { color: var(--color-link); background: var(--color-primary-soft); border-color: #9cb8ad; }
+.date-range-trigger:focus-visible { outline: 2px solid #3b8069; outline-offset: 2px; }
+.date-range-trigger-icon { display: inline-grid; place-items: center; color: var(--color-link); }
+.date-range-trigger-label { color: var(--color-heading); }
+.date-range-trigger-chevron { display: inline-grid; place-items: center; color: var(--color-text-muted); transition: transform .18s ease; }
+.date-range-trigger-chevron.open { transform: rotate(180deg); }
+.date-range-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: 300px; max-width: calc(100vw - 32px); display: grid; gap: 12px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 18px 45px rgba(13,53,41,.18); padding: 14px; }
+.date-range-panel-title { color: var(--color-heading); font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.date-range-shortcuts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.date-range-shortcut { width: 100%; text-align: left; color: var(--color-text-secondary); background: transparent; border: 0; border-radius: 8px; padding: 9px 10px; font-size: 11px; font-weight: 600; }
+.date-range-shortcut:hover, .date-range-shortcut:focus-visible { color: var(--color-link); background: var(--color-primary-soft); outline: none; }
+.date-range-shortcut-custom { color: var(--color-link); border-top: 1px solid var(--color-divider); border-radius: 0 0 8px 8px; margin-top: 4px; padding-top: 11px; }
+.date-range-custom { display: grid; gap: 12px; }
+.date-range-custom-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.date-range-custom-fields label { color: var(--color-text-secondary); font-size: 10px; font-weight: 600; }
+.date-range-custom-fields input { width: 100%; color: var(--color-text); background: var(--color-input-bg); border: 1px solid var(--color-input-border); border-radius: 8px; outline: none; padding: 9px 10px; margin-top: 5px; font-size: 11px; }
+.date-range-error { color: var(--color-notice-error-text); background: var(--color-notice-error-bg); border-radius: 7px; padding: 8px 10px; font-size: 10px; }
+.date-range-custom-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 700px) {
+  .date-range-filter { width: 100%; justify-content: stretch; }
+  .date-range-trigger { width: 100%; justify-content: space-between; }
+  .date-range-panel { left: 0; right: 0; width: auto; max-width: none; }
+  .date-range-custom-fields { grid-template-columns: 1fr; }
+}
 .cutoff span small, .cutoff span strong { display: block; }
 .cutoff span small { font-size: 9px; color: #7a8f87; }
 .cutoff span strong { font-size: 12px; }
