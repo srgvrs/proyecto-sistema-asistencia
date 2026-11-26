@@ -1121,10 +1121,19 @@ type RangeDataResult = {
   visitors: Visitor[]
   teacherAttendance: TeacherAttendance[]
   truncated: boolean
+  warnings: string[]
 }
 
 const RANGE_PAGE_SIZE = 500
 const RANGE_MAX_PAGES = 20
+const MAX_RANGE_DAYS = 366
+
+const daysBetweenInclusive = (desde: string, hasta: string): number => {
+  const start = new Date(`${desde}T00:00:00Z`).valueOf()
+  const end = new Date(`${hasta}T00:00:00Z`).valueOf()
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return Number.POSITIVE_INFINITY
+  return Math.floor((end - start) / 86_400_000) + 1
+}
 
 const fetchAllPages = async <T>(
   payload: Awaited<ReturnType<typeof getPayload>>,
@@ -1172,6 +1181,9 @@ export async function loadRangeDataAction(
   if (!isISODate(input?.desde) || !isISODate(input?.hasta) || input.desde > input.hasta) {
     return { ok: false, error: "El rango de fechas no es válido." }
   }
+  if (daysBetweenInclusive(input.desde, input.hasta) > MAX_RANGE_DAYS) {
+    return { ok: false, error: `El rango no puede exceder ${MAX_RANGE_DAYS} días.` }
+  }
   try {
     const payload = await getPayload({ config })
     const dayRange = localDayRangeToUTC(input.desde, input.hasta)
@@ -1187,26 +1199,47 @@ export async function loadRangeDataAction(
         { entryTime: { less_than_equal: dayRange.end } },
       ],
     }
+
+    const warnings: string[] = []
+
+    const loadCollection = async <T>(
+      collection: "attendance" | "visitors" | "teacher-attendance",
+      args: Parameters<typeof payload.find>[0],
+    ): Promise<{ docs: T[]; truncated: boolean }> => {
+      try {
+        return await fetchAllPages<T>(payload, args, user)
+      } catch (error: any) {
+        const message = error?.data?.errors?.[0]?.message ?? error?.message ?? String(error)
+        console.error(
+          `LOAD RANGE DATA COLLECTION FAILED [${collection}]`,
+          JSON.stringify({ collection, message, errors: error?.data?.errors ?? null }, null, 2),
+        )
+        warnings.push(`No fue posible cargar la colección "${collection}".`)
+        return { docs: [], truncated: false }
+      }
+    }
+
     const [attendance, visitors, teacherAttendance] = await Promise.all([
-      fetchAllPages<AttendanceDoc>(payload, {
+      loadCollection<AttendanceDoc>("attendance", {
         collection: "attendance",
         where: attendanceWhere,
         sort: "-date",
         depth: 0,
-      }, user),
-      fetchAllPages<VisitorDoc>(payload, {
+      }),
+      loadCollection<VisitorDoc>("visitors", {
         collection: "visitors",
         where: timeWhere,
         sort: "-entryTime",
         depth: 0,
-      }, user),
-      fetchAllPages<TeacherAttendanceDoc>(payload, {
+      }),
+      loadCollection<TeacherAttendanceDoc>("teacher-attendance", {
         collection: "teacher-attendance",
         where: timeWhere,
         sort: "-date",
         depth: 0,
-      }, user),
+      }),
     ])
+
     return {
       ok: true,
       data: {
@@ -1220,6 +1253,7 @@ export async function loadRangeDataAction(
           exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
         })),
         truncated: attendance.truncated || visitors.truncated || teacherAttendance.truncated,
+        warnings,
       },
     }
   } catch (error: any) {
@@ -1414,7 +1448,7 @@ export async function loadSchoolStateAction(): Promise<
     }
   } catch (error: any) {
     console.error("LOAD ERROR", JSON.stringify((error as any)?.data?.errors ?? (error as any)?.message ?? error, null, 2))
-    return { ok: false, error: (error as any)?.data?.errors?.[0]?.message || (error as any)?.message || "No fue posible actualizar la información escolar." }
+    return { ok: false, error: "No fue posible actualizar la información escolar." }
   }
 }
 
@@ -1542,11 +1576,14 @@ export async function createStudentAction(
       error: "No fue posible asignar una matrícula única en este grupo. Intenta nuevamente.",
     }
   } catch (error: any) {
-    console.error("ERROR AL CREAR ALUMNO:", error)
+    console.error(
+      "ERROR AL CREAR ALUMNO:",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
     if (/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
       return { ok: false, error: "Esa matrícula ya está registrada." }
     }
-    return { ok: false, error: error?.message || "No fue posible crear el alumno." }
+    return { ok: false, error: "No fue posible crear el alumno." }
   }
 }
 
@@ -1731,10 +1768,7 @@ export async function updateStudentAction(
     if (/unique|duplicate|UNIQUE/i.test(error?.message ?? "")) {
       return { ok: false, error: "Esa matrícula ya está registrada." }
     }
-    return {
-      ok: false,
-      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible actualizar el alumno.",
-    }
+    return { ok: false, error: "No fue posible actualizar el alumno." }
   }
 }
 
@@ -1777,10 +1811,7 @@ export async function deleteStudentAction(
       "DELETE STUDENT ERROR",
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
-    return {
-      ok: false,
-      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible eliminar el alumno.",
-    }
+    return { ok: false, error: "No fue posible eliminar el alumno." }
   }
 }
 
@@ -1911,10 +1942,7 @@ export async function deleteGroupAction(
       "DELETE GROUP ERROR",
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
-    return {
-      ok: false,
-      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible eliminar el grupo.",
-    }
+    return { ok: false, error: "No fue posible eliminar el grupo." }
   }
 }
 
@@ -2157,7 +2185,7 @@ export async function createVisitorAction(
       "CREATE VISITOR ERROR",
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
-    return { ok: false, error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible registrar al visitante." }
+    return { ok: false, error: "No fue posible registrar al visitante." }
   }
 }
 
@@ -2562,7 +2590,7 @@ export async function assignTeacherToGroupAction(
     }
   } catch (error: any) {
     console.error("ERROR REAL AL ASIGNAR:", JSON.stringify(error?.data?.errors ?? error, null, 2))
-    return { ok: false, error: error?.data?.errors?.[0]?.message || error?.message || "Error al asignar." }
+    return { ok: false, error: "No fue posible asignar el docente al grupo." }
   }
 }
 
@@ -2608,10 +2636,7 @@ export async function deleteTeacherAction(
       "ERROR REAL AL ELIMINAR DOCENTE:",
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
-    return {
-      ok: false,
-      error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible eliminar al docente.",
-    }
+    return { ok: false, error: "No fue posible eliminar al docente." }
   }
 }
 
