@@ -136,6 +136,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     badge: <><rect x="4" y="3" width="16" height="18" rx="2" /><circle cx="12" cy="9" r="2.5" /><path d="M8 16c.8-2.2 2.1-3.3 4-3.3s3.2 1.1 4 3.3M9 3v2h6V3" /></>,
     logout: <><path d="M10 5H4v14h6M14 8l4 4-4 4M18 12H8" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    refresh: <><path d="M20 11a8 8 0 0 0-14.3-4.7L4 8" /><path d="M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.3 4.7L20 16" /><path d="M20 20v-4h-4" /></>,
     check: <path d="m5 12 4 4L19 6" />,
     alert: <><path d="M12 3 2.8 19h18.4L12 3Z" /><path d="M12 9v4M12 16.5v.1" /></>,
     search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
@@ -458,6 +459,7 @@ function App({
           <div className="topbar-title">
             <span>Sistema de asistencia</span>
             <strong>{view === "inicio" ? "Resumen" : view === "visitantes" ? (session.role === "Docente" ? "Visitas" : "Personas externas") : view === "lista" ? "Pase de lista" : view === "listas-oficiales" ? "Listas oficiales" : view === "alumnos" ? "Agregar alumno a la lista" : view === "grupos" ? "Agregar grupo a docente" : view === "catalogo" ? "Grupos y alumnos" : view === "personal" ? "Gestión de docentes" : view === "usuarios" ? "Usuarios y accesos" : view === "cierre-ciclo" ? "Cerrar ciclo escolar" : view === "docentes" ? session.role === "Directivo" ? "Asistencia Docentes" : "Registrar entrada docente" : "Reportes"}</strong>
+            {isReadOnlyView && <small aria-live="polite">{refreshedLabel}</small>}
           </div>
           <div className="navigation-search" onFocus={() => setSearchOpen(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchOpen(false); }}>
             <Icon name="search" size={18} />
@@ -494,9 +496,16 @@ function App({
           </div>
           {isReadOnlyView && (
             <div className="refresh-controls">
-              <small aria-live="polite">{refreshedLabel}</small>
-              <button type="button" className="secondary-button" onClick={manualRefresh} disabled={refreshPending} aria-busy={refreshPending}>
-                <Icon name="clock" size={16} /> {refreshPending ? "Actualizando…" : "Actualizar"}
+              <button
+                type="button"
+                className={`refresh-icon-button ${refreshPending ? "is-refreshing" : ""}`}
+                onClick={manualRefresh}
+                disabled={refreshPending}
+                aria-busy={refreshPending}
+                aria-label={refreshPending ? "Actualizando…" : "Actualizar"}
+                title={refreshPending ? "Actualizando…" : `Actualizar · ${refreshedLabel}`}
+              >
+                <Icon name="refresh" size={18} />
               </button>
             </div>
           )}
