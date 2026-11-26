@@ -49,7 +49,7 @@ const capitalize = (value: string): string =>
 const dayLabelFormatter = new Intl.DateTimeFormat("es-MX", {
   weekday: "long",
   day: "numeric",
-  month: "short",
+  month: "long",
   year: "numeric",
   timeZone: "UTC",
 })
