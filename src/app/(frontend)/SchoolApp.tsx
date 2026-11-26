@@ -40,6 +40,15 @@ import { DateRangeFilter } from "./DateRangeFilter";
 import type { DateRange } from "@/lib/date-range";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
+
+// Vistas de solo consulta que se refrescan automáticamente cada 30 s.
+// "lista" (Pase de lista) queda fuera a propósito para no borrar el borrador en edición.
+const AUTO_REFRESH_VIEWS: ReadonlySet<View> = new Set<View>([
+  "inicio",
+  "visitantes",
+  "listas-oficiales",
+  "docentes",
+]);
 type NavigationItem = { view: View; icon: string; label: string; description: string; keywords: string };
 
 const normalizeSearch = (value: string) =>
@@ -345,23 +354,23 @@ function App({
     void loadRange(initialDateRange);
   }, [initialDateRange, loadRange, session?.role]);
 
-  const isReadOnlyView = view === "inicio" || view === "visitantes" || view === "listas-oficiales" || view === "docentes";
+  const isReadOnlyView = AUTO_REFRESH_VIEWS.has(view);
 
   useEffect(() => {
-    if (!session || !isReadOnlyView) return;
+    if (!session || !AUTO_REFRESH_VIEWS.has(view)) return;
     const interval = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
       void refreshSchoolState();
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [isReadOnlyView, refreshSchoolState, session]);
+  }, [view, refreshSchoolState, session]);
 
   useEffect(() => {
-    if (!isReadOnlyView) return;
+    if (!AUTO_REFRESH_VIEWS.has(view)) return;
     const tick = window.setInterval(() => setNowTick(Date.now()), 30_000);
     return () => window.clearInterval(tick);
-  }, [isReadOnlyView]);
+  }, [view]);
 
   const minutesSinceRefresh = Math.max(0, Math.floor((nowTick - lastRefreshedAt) / 60_000));
   const refreshedLabel = minutesSinceRefresh === 0
