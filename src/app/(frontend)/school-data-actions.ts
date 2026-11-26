@@ -1134,13 +1134,27 @@ const fetchAllPages = async <T>(
   const docs: T[] = []
   let page = 1
   while (page <= RANGE_MAX_PAGES) {
-    const result = await payload.find({
-      ...args,
-      page,
-      limit: RANGE_PAGE_SIZE,
-      overrideAccess: false,
-      user,
-    })
+    let result: Awaited<ReturnType<typeof payload.find>>
+    try {
+      result = await payload.find({
+        ...args,
+        page,
+        limit: RANGE_PAGE_SIZE,
+        overrideAccess: false,
+        user,
+      })
+    } catch (error: any) {
+      console.error(
+        "LOAD RANGE DATA COLLECTION ERROR",
+        JSON.stringify({
+          collection: args.collection,
+          page,
+          message: error?.data?.errors?.[0]?.message ?? error?.message ?? String(error),
+          errors: error?.data?.errors ?? null,
+        }, null, 2),
+      )
+      throw error
+    }
     docs.push(...(result.docs as T[]))
     if (!result.hasNextPage) return { docs, truncated: false }
     page += 1
