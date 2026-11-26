@@ -2133,7 +2133,7 @@ export async function createVisitorAction(
 
     const doc = await payload.create({
       collection: "visitors",
-      data,
+      data: data as Parameters<typeof payload.create<"visitors">>[0]["data"],
       overrideAccess: false,
       user,
     })
