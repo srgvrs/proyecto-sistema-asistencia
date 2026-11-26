@@ -4,7 +4,9 @@ import { isDirectivo, isVigilante } from "../access"
 const readVisitors: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
-  return req.user.role === "Directivo" || req.user.role === "Vigilante de Acceso"
+  if (req.user.role === "Directivo" || req.user.role === "Vigilante de Acceso") return true
+  if (req.user.role === "Docente") return { hostUser: { equals: req.user.id } }
+  return false
 }
 
 const createVisitors: Access = ({ req }) => {
@@ -75,16 +77,65 @@ export const Visitors: CollectionConfig = {
     },
     {
       name: "host",
-      label: "Docente o persona visitada",
+      label: "Persona o área visitada",
+      type: "text",
+      required: false,
+    },
+    {
+      name: "hostUser",
+      label: "Docente o directivo visitado",
       type: "relationship",
       relationTo: "users",
       required: false,
       hasMany: false,
       filterOptions: {
-        role: { equals: "Docente" },
+        role: { in: ["Docente", "Directivo"] },
       },
       admin: {
-        description: "Docente que recibe la visita. Permite al docente consultar solo sus propias visitas.",
+        description: "Permite al docente consultar y autorizar solo sus propias visitas.",
+      },
+    },
+    {
+      name: "authorizationStatus",
+      label: "Estado de autorización",
+      type: "select",
+      required: false,
+      options: ["Pendiente", "Autorizada", "Rechazada"],
+      admin: {
+        readOnly: true,
+        description: "Lo fija el servidor. El vigilante no puede modificarlo.",
+      },
+    },
+    {
+      name: "authorizedBy",
+      label: "Autorizado por",
+      type: "relationship",
+      relationTo: "users",
+      required: false,
+      hasMany: false,
+      admin: {
+        readOnly: true,
+      },
+    },
+    {
+      name: "authorizedByName",
+      label: "Nombre de quien autorizó",
+      type: "text",
+      required: false,
+      admin: {
+        readOnly: true,
+      },
+    },
+    {
+      name: "authorizedAt",
+      label: "Fecha y hora de autorización",
+      type: "date",
+      required: false,
+      admin: {
+        readOnly: true,
+        date: {
+          pickerAppearance: "dayAndTime",
+        },
       },
     },
     {

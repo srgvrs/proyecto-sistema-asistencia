@@ -43,12 +43,18 @@ export type OfficialAttendanceList = {
   updatedAt: string
 }
 
+export type VisitorAuthorizationStatus = "Pendiente" | "Autorizada" | "Rechazada"
+
 export type Visitor = {
   id: string
   name: string
   identification: string
   reason: string
   host: string
+  hostUserId: string | null
+  authorizationStatus: VisitorAuthorizationStatus
+  authorizedByName: string
+  authorizedAt: string | null
   date: string
   entryTime: string
   exitTime: string | null

@@ -265,6 +265,12 @@ type VisitorDoc = {
   reason: string
   entryTime: string
   exitTime?: string | null
+  host?: string | null
+  hostUser?: number | { id: number } | null
+  authorizationStatus?: "Pendiente" | "Autorizada" | "Rechazada" | null
+  authorizedBy?: number | { id: number } | null
+  authorizedByName?: string | null
+  authorizedAt?: string | null
   registeredBy: number | { id: number }
 }
 
@@ -431,7 +437,13 @@ const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
   name: doc.name,
   identification: "",
   reason: doc.reason,
-  host: "",
+  host: (doc.host ?? "").trim(),
+  hostUserId: getRelationId(doc.hostUser) || null,
+  authorizationStatus: doc.authorizationStatus === "Autorizada" || doc.authorizationStatus === "Rechazada"
+    ? doc.authorizationStatus
+    : "Pendiente",
+  authorizedByName: (doc.authorizedByName ?? "").trim(),
+  authorizedAt: doc.authorizedAt ? toHHMM(doc.authorizedAt) : null,
   date: toISODate(doc.entryTime),
   entryTime: toHHMM(doc.entryTime),
   exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
@@ -1238,7 +1250,7 @@ export async function loadSchoolStateAction(): Promise<
           user,
         }
 
-    const canReadVisitors = user.role === "Directivo" || user.role === "Vigilante de Acceso"
+    const canReadVisitors = user.role === "Directivo" || user.role === "Vigilante de Acceso" || user.role === "Docente"
 
     const [
       groupsResult,
@@ -1255,7 +1267,14 @@ export async function loadSchoolStateAction(): Promise<
       safeFind({ collection: "students", limit: 2000, sort: "paternalSurname", overrideAccess: false, user }),
       safeFind({ collection: "attendance", limit: 5000, sort: "-date", overrideAccess: false, user }),
       canReadVisitors
-        ? safeFind({ collection: "visitors", limit: 500, sort: "-entryTime", overrideAccess: false, user })
+        ? safeFind({
+            collection: "visitors",
+            where: user.role === "Docente" ? { hostUser: { equals: user.id } } : undefined,
+            limit: 500,
+            sort: "-entryTime",
+            overrideAccess: false,
+            user,
+          })
         : Promise.resolve({ docs: [], totalDocs: 0 } as any),
       safeFind({ collection: "official-lists", limit: 200, sort: "-createdAt", overrideAccess: false, user }),
       safeFind(teachersQuery),
@@ -2025,6 +2044,8 @@ type VisitorInput = {
   reason: string
   entryTime: string
   exitTime?: string | null
+  host?: string
+  hostUserId?: string | null
 }
 
 export async function createVisitorAction(
@@ -2037,8 +2058,41 @@ export async function createVisitorAction(
   if (!isString(input.name) || !isString(input.reason) || !isISODateTime(input.entryTime)) {
     return { ok: false, error: "Los datos del visitante no son válidos." }
   }
+  const host = isString(input.host) ? input.host.trim() : ""
+  if (host.length > 120) {
+    return { ok: false, error: "La persona o área visitada no puede exceder 120 caracteres." }
+  }
+  let hostUserId: number | null = null
+  if (input.hostUserId !== undefined && input.hostUserId !== null && input.hostUserId !== "") {
+    if (!isString(input.hostUserId)) {
+      return { ok: false, error: "El docente o directivo visitado no es válido." }
+    }
+    const parsed = Number(input.hostUserId)
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return { ok: false, error: "El docente o directivo visitado no es válido." }
+    }
+    hostUserId = parsed
+  }
   try {
     const payload = await getPayload({ config })
+    if (hostUserId !== null) {
+      const hostResult = await payload.find({
+        collection: "users",
+        where: {
+          and: [
+            { id: { equals: hostUserId } },
+            { role: { in: ["Docente", "Directivo"] } },
+          ],
+        },
+        limit: 1,
+        depth: 0,
+        overrideAccess: false,
+        user,
+      })
+      if (!hostResult.docs.length) {
+        return { ok: false, error: "El docente o directivo visitado no existe." }
+      }
+    }
     const doc = await payload.create({
       collection: "visitors",
       data: {
@@ -2046,6 +2100,9 @@ export async function createVisitorAction(
         reason: input.reason.trim(),
         entryTime: input.entryTime,
         exitTime: input.exitTime || null,
+        host: host || undefined,
+        hostUser: hostUserId ?? undefined,
+        authorizationStatus: "Pendiente",
         registeredBy: user.id,
       },
       overrideAccess: false,
@@ -2101,6 +2158,69 @@ export async function updateVisitorAction(
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
     return { ok: false, error: "No fue posible actualizar al visitante." }
+  }
+}
+
+type AuthorizeVisitorInput = {
+  visitorId: string
+  decision: "Autorizada" | "Rechazada"
+}
+
+export async function authorizeVisitorAction(
+  input: AuthorizeVisitorInput,
+): Promise<{ ok: true; visitor: Visitor } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || (user.role !== "Directivo" && user.role !== "Docente")) {
+    return { ok: false, error: "No tienes permiso para autorizar visitas." }
+  }
+  if (!isString(input.visitorId) || (input.decision !== "Autorizada" && input.decision !== "Rechazada")) {
+    return { ok: false, error: "Los datos de la autorización no son válidos." }
+  }
+  const numericId = Number(input.visitorId)
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return { ok: false, error: "Identificador inválido." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    const existing = await payload.findByID({
+      collection: "visitors",
+      id: numericId,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    }) as VisitorDoc | null
+    if (!existing) {
+      return { ok: false, error: "La visita no existe." }
+    }
+    const currentStatus = existing.authorizationStatus === "Autorizada" || existing.authorizationStatus === "Rechazada"
+      ? existing.authorizationStatus
+      : "Pendiente"
+    if (user.role === "Docente") {
+      if (getRelationId(existing.hostUser) !== String(user.id)) {
+        return { ok: false, error: "Solo puedes autorizar las visitas dirigidas a ti." }
+      }
+      if (currentStatus !== "Pendiente") {
+        return { ok: false, error: "Esta visita ya fue autorizada o rechazada." }
+      }
+    }
+    const doc = await payload.update({
+      collection: "visitors",
+      id: numericId,
+      data: {
+        authorizationStatus: input.decision,
+        authorizedBy: user.id,
+        authorizedByName: user.name,
+        authorizedAt: new Date().toISOString(),
+      },
+      overrideAccess: true,
+    })
+    return { ok: true, visitor: mapVisitorDoc(doc as VisitorDoc) }
+  } catch (error: any) {
+    console.error(
+      "AUTHORIZE VISITOR ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return { ok: false, error: "No fue posible registrar la autorización." }
   }
 }
 

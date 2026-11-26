@@ -12,6 +12,7 @@ import {
   createStudentAction,
   createTeacherAttendanceAction,
   createTeacherJustificationAction,
+  authorizeVisitorAction,
   createVisitorAction,
   deleteStudentAction,
   deleteTeacherAction,
@@ -341,7 +342,7 @@ function App({
 
   const navigationItems: NavigationItem[] = [
     { view: "inicio", icon: "home", label: "Resumen", description: "Panel principal y actividad reciente", keywords: "inicio dashboard principal" },
-    ...(session.role !== "Docente" ? [{ view: "visitantes" as const, icon: "badge", label: session.role === "Directivo" ? "Personas ingresadas" : "Personas externas", description: "Consulta y control de accesos", keywords: "visitantes acceso entrada salida vigilancia" }] : []),
+    ...(session.role !== "Docente" ? [{ view: "visitantes" as const, icon: "badge", label: session.role === "Directivo" ? "Personas ingresadas" : "Personas externas", description: "Consulta y control de accesos", keywords: "visitantes acceso entrada salida vigilancia" }] : [{ view: "visitantes" as const, icon: "badge", label: "Visitas por autorizar", description: "Autoriza o rechaza las visitas dirigidas a ti", keywords: "visitantes autorizar rechazar visitas docente" }]),
     ...(session.role === "Docente" ? [
       { view: "lista" as const, icon: "users", label: "Pase de lista", description: "Registrar asistencia del alumnado", keywords: "asistencia alumnos presentes faltas retardos" },
       { view: "alumnos" as const, icon: "plus", label: "Agregar alumno a la lista", description: "Administrar alumnos de tus grupos", keywords: "alta estudiante padrón grupo" },
@@ -447,7 +448,7 @@ function App({
 
         <section className="content">
           {view === "inicio" && <Dashboard userName={session.name} role={session.role} records={records} students={students} visitors={visitors} assignedGroups={teacherGroups[session.name] || []} onNavigate={navigate} />}
-          {view === "visitantes" && session.role !== "Docente" && (
+          {view === "visitantes" && (
             <>
               {session.role === "Directivo" && <DateRangeFilter initial={initialDateRange} />}
               {rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
@@ -456,6 +457,9 @@ function App({
                 setVisitors={setVisitors}
                 readOnly={session.role === "Directivo"}
                 canDelete={session.role === "Directivo"}
+                canAuthorize={session.role === "Directivo" || session.role === "Docente"}
+                currentUserId={session.id}
+                currentUserRole={session.role}
               />
             </>
           )}
@@ -916,17 +920,24 @@ function VisitorRegistry({
   setVisitors,
   readOnly,
   canDelete,
+  canAuthorize,
+  currentUserId,
+  currentUserRole,
 }: {
   visitors: Visitor[];
   setVisitors: React.Dispatch<React.SetStateAction<Visitor[]>>;
   readOnly: boolean;
   canDelete: boolean;
+  canAuthorize: boolean;
+  currentUserId: string;
+  currentUserRole: Role;
 }) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [identification, setIdentification] = useState("");
   const [reason, setReason] = useState("");
   const [host, setHost] = useState("");
+  const [hostUserId, setHostUserId] = useState("");
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState("");
   const { requestConfirmation, confirmationDialog } = useConfirmation();
@@ -941,6 +952,8 @@ function VisitorRegistry({
         name: name.trim(),
         reason: reason.trim(),
         entryTime,
+        host: host.trim(),
+        hostUserId: hostUserId || null,
       });
       if (!result.ok) {
         setNotice(result.error);
@@ -949,12 +962,12 @@ function VisitorRegistry({
       setVisitors((current) => [{
         ...result.visitor,
         identification: identification.trim(),
-        host: host.trim(),
       }, ...current]);
       setName("");
       setIdentification("");
       setReason("");
       setHost("");
+      setHostUserId("");
       setNotice("La entrada de la persona externa fue registrada correctamente.");
     });
   };
@@ -975,6 +988,32 @@ function VisitorRegistry({
         setVisitors((current) => current.map((item) => item.id === visitor.id ? { ...item, exitTime: result.visitor.exitTime } : item));
       });
     });
+  };
+
+  const authorizeVisitor = (visitor: Visitor, decision: "Autorizada" | "Rechazada") => {
+    requestConfirmation({
+      title: decision === "Autorizada" ? "Autorizar visita" : "Rechazar visita",
+      message: decision === "Autorizada"
+        ? `Se autorizará la visita de ${visitor.name}. ¿Deseas continuar?`
+        : `Se rechazará la visita de ${visitor.name}. ¿Deseas continuar?`,
+      confirmLabel: decision === "Autorizada" ? "Sí, autorizar" : "Sí, rechazar",
+      tone: decision === "Autorizada" ? "default" : "danger",
+    }, () => {
+      startTransition(async () => {
+        const result = await authorizeVisitorAction({ visitorId: visitor.id, decision });
+        if (!result.ok) {
+          setNotice(result.error);
+          return;
+        }
+        setVisitors((current) => current.map((item) => item.id === result.visitor.id ? { ...item, ...result.visitor } : item));
+      });
+    });
+  };
+
+  const canAuthorizeVisitor = (visitor: Visitor) => {
+    if (!canAuthorize) return false;
+    if (currentUserRole === "Directivo") return true;
+    return visitor.hostUserId === currentUserId && visitor.authorizationStatus === "Pendiente";
   };
 
   const handleDeleteVisitor = (visitor: Visitor) => {
@@ -998,6 +1037,21 @@ function VisitorRegistry({
   const filteredVisitors = visitors.filter((visitor) =>
     `${visitor.name} ${visitor.identification} ${visitor.host}`.toLowerCase().includes(search.toLowerCase()),
   );
+  const exportVisitorsCSV = () => {
+    const escapeCell = (value: string) => `"${sanitizeCsvCell(value).replaceAll("\"", "\"\"")}"`;
+    const rows = filteredVisitors.map((visitor) => [
+      visitor.name,
+      visitor.host,
+      visitor.authorizationStatus,
+      visitor.authorizedByName,
+      visitor.authorizedAt ?? "",
+      visitor.date,
+      visitor.entryTime,
+      visitor.exitTime ?? "",
+    ].map(escapeCell).join(","));
+    const csv = ["Persona,Persona o área visitada,Estado,Autorizó,Fecha y hora de autorización,Fecha,Entrada,Salida", ...rows].join("\n");
+    downloadBlob(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }), "reporte-visitas.csv");
+  };
   const activeCount = visitors.filter((visitor) => !visitor.exitTime).length;
 
   return (
@@ -1020,6 +1074,7 @@ function VisitorRegistry({
             <label>Identificación presentada<input required value={identification} onChange={(e) => setIdentification(e.target.value)} placeholder="Ej. INE · últimos 4 dígitos" /></label>
             <label>Motivo de la visita<textarea required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Describe brevemente el motivo" rows={3} /></label>
             <label>Persona o área que visita<input required value={host} onChange={(e) => setHost(e.target.value)} placeholder="Nombre del docente o área" /></label>
+            <label>Docente o directivo visitado (opcional)<input value={hostUserId} onChange={(e) => setHostUserId(e.target.value)} placeholder="ID de usuario (opcional)" /></label>
             <div className="entry-preview"><Icon name="clock" /><div><small>FECHA Y HORA DE ENTRADA</small><strong>Se asignarán automáticamente al confirmar</strong></div></div>
             <button className="primary-button" type="submit" disabled={isPending}><Icon name="check" size={18} /> {isPending ? "Guardando…" : "Registrar entrada"}</button>
           </div>
@@ -1029,6 +1084,7 @@ function VisitorRegistry({
           <div className="panel-head visitor-history-head">
             <div><p className="eyebrow">BITÁCORA DE ACCESO</p><h2>Visitas registradas</h2></div>
             <div className="visitor-search"><Icon name="search" size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar persona…" /></div>
+            <button className="secondary-button" type="button" onClick={exportVisitorsCSV}><Icon name="download" size={16} /> Exportar CSV</button>
           </div>
           <div className="visitor-table">
             <div className="visitor-table-head"><span>Persona</span><span>Destino</span><span>Entrada</span><span>Salida</span></div>
@@ -1037,6 +1093,14 @@ function VisitorRegistry({
               <span>{visitor.host}</span>
               <span><strong>{visitor.entryTime}</strong><small>{formatDate(visitor.date)}</small></span>
               <span>{visitor.exitTime ? <span className="exit-time">{visitor.exitTime}</span> : readOnly ? <span className="inside-status">En plantel</span> : <button className="exit-button" onClick={() => registerExit(visitor)} disabled={isPending}>Registrar salida</button>}</span>
+              <span className={`presence-badge ${visitor.authorizationStatus === "Autorizada" ? "completed" : ""}`}>{visitor.authorizationStatus}</span>
+              {visitor.authorizedByName && <small>Autorizó: {visitor.authorizedByName}</small>}
+              {canAuthorizeVisitor(visitor) && (
+                <div className="user-access-actions">
+                  <button className="reset-password-button" type="button" onClick={() => authorizeVisitor(visitor, "Autorizada")} disabled={isPending}><Icon name="check" size={15} /> Autorizar</button>
+                  <button className="delete-button" type="button" onClick={() => authorizeVisitor(visitor, "Rechazada")} disabled={isPending}><Icon name="close" size={15} /> Rechazar</button>
+                </div>
+              )}
               {canDelete && visitor.exitTime && (
                 <button className="delete-button" onClick={() => handleDeleteVisitor(visitor)} disabled={isPending} aria-label={`Eliminar registro de ${visitor.name}`}>
                   <Icon name="trash" size={16} />
