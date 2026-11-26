@@ -836,20 +836,20 @@ type OfficializeAttendanceInput = {
 export async function officializeAttendanceAction(
   input: OfficializeAttendanceInput,
 ): Promise<
-  | { ok: true; attendanceRecords: AttendanceRecord[]; officialAttendanceLists: OfficialAttendanceList[]; warning?: string }
-  | { ok: false; error: string }
+  | { ok: true; attendanceRecords: AttendanceRecord[]; officialAttendanceLists: OfficialAttendanceList[]; warning?: string; sessionEnds: boolean }
+  | { ok: false; error: string; sessionEnds: boolean }
 > {
   const user = await appAuth.currentUser()
   if (!user || user.role !== "Docente") {
     return { ok: false, error: "Solo un docente puede oficializar la asistencia." }
   }
   if (!isString(input.group) || !isISODate(input.date) || !Array.isArray(input.attendance) || input.attendance.length > 500) {
-    return { ok: false, error: "La asistencia enviada no tiene un formato válido." }
+    return { ok: false, error: "La asistencia enviada no tiene un formato válido.", sessionEnds: false }
   }
   if (!input.attendance.every((item) =>
     item && isString(item.studentId) && ["Presente", "Retardo", "Falta"].includes(item.status)
   )) {
-    return { ok: false, error: "Hay estados de asistencia no válidos." }
+    return { ok: false, error: "Hay estados de asistencia no válidos.", sessionEnds: false }
   }
 
   try {
@@ -863,9 +863,9 @@ export async function officializeAttendanceAction(
       user,
     })
     const groupDoc = groupsResult.docs[0] as GroupDoc | undefined
-    if (!groupDoc) return { ok: false, error: "El grupo no existe." }
+    if (!groupDoc) return { ok: false, error: "El grupo no existe.", sessionEnds: false }
     if (getRelationId(groupDoc.teacher) !== String(user.id)) {
-      return { ok: false, error: "El grupo no está asignado a tu cuenta docente." }
+      return { ok: false, error: "El grupo no está asignado a tu cuenta docente.", sessionEnds: false }
     }
 
     const studentsResult = await payload.find({
@@ -877,12 +877,12 @@ export async function officializeAttendanceAction(
       user,
     })
     const groupStudents = (studentsResult.docs as StudentDoc[]).filter((student) => student.status !== "Egresado")
-    if (!groupStudents.length) return { ok: false, error: "El grupo no tiene alumnos registrados." }
+    if (!groupStudents.length) return { ok: false, error: "El grupo no tiene alumnos registrados.", sessionEnds: false }
 
     const submittedStatuses = new Map(input.attendance.map((item) => [item.studentId, item.status]))
     if (submittedStatuses.size !== groupStudents.length ||
       groupStudents.some((student) => !submittedStatuses.has(String(student.id)))) {
-      return { ok: false, error: "La lista debe incluir a todos los alumnos del grupo." }
+      return { ok: false, error: "La lista debe incluir a todos los alumnos del grupo.", sessionEnds: false }
     }
 
     const existingAttendance = await payload.find({
@@ -1019,6 +1019,7 @@ export async function officializeAttendanceAction(
     ]
 
     let warning: string | undefined
+    let sessionEnds = false
     const today = todayISO()
     if (input.date === today) {
       try {
@@ -1058,6 +1059,7 @@ export async function officializeAttendanceAction(
             break
           }
         }
+        sessionEnds = allOfficializedToday
         if (allOfficializedToday) {
           const todayAttendance = await payload.find({
             collection: "teacher-attendance",
@@ -1102,13 +1104,13 @@ export async function officializeAttendanceAction(
       }
     }
 
-    return { ok: true, attendanceRecords, officialAttendanceLists, warning }
+    return { ok: true, attendanceRecords, officialAttendanceLists, warning, sessionEnds }
   } catch (error: any) {
     console.error(
       "OFFICIALIZE ERROR",
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
-    return { ok: false, error: "No fue posible oficializar la lista. Intenta nuevamente." }
+    return { ok: false, error: "No fue posible oficializar la lista. Intenta nuevamente.", sessionEnds: false }
   }
 }
 

@@ -2686,6 +2686,9 @@ function RollCall({
   const [draft, setDraft] = useState<Record<string, Status>>({});
   const [notice, setNotice] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [sessionEnds, setSessionEnds] = useState(false);
+  const [logoutCountdown, setLogoutCountdown] = useState(10);
+  const logoutStartedRef = useRef(false);
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   useEffect(() => {
     if (!availableGroups.includes(group)) {
@@ -2694,6 +2697,46 @@ function RollCall({
       setNotice("");
     }
   }, [availableGroups, group]);
+  useEffect(() => {
+    if (!sessionEnds) return;
+    if (logoutStartedRef.current) return;
+    logoutStartedRef.current = true;
+    setLogoutCountdown(10);
+    const interval = window.setInterval(() => {
+      setLogoutCountdown((current) => {
+        if (current <= 1) {
+          window.clearInterval(interval);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [sessionEnds]);
+  useEffect(() => {
+    if (!sessionEnds || logoutCountdown > 0) return;
+    void (async () => {
+      try {
+        await logoutAction();
+      } catch (error) {
+        console.error("ROLL CALL LOGOUT ERROR", error);
+      }
+      router.refresh();
+    })();
+  }, [logoutCountdown, sessionEnds, router]);
+  const cancelSessionEnd = () => {
+    logoutStartedRef.current = false;
+    setSessionEnds(false);
+    setLogoutCountdown(10);
+  };
+  const logoutNow = async () => {
+    try {
+      await logoutAction();
+    } catch (error) {
+      console.error("ROLL CALL LOGOUT ERROR", error);
+    }
+    router.refresh();
+  };
   const groupStudents = availableGroups.includes(group)
     ? sortAndNumberGroupStudents(students.filter(isActiveStudent), group)
     : [];
@@ -2759,6 +2802,10 @@ function RollCall({
             ? `Pase de lista oficializado. ${result.warning}`
             : "Pase de lista oficializado y agregado al formato mensual. Ya no se permiten modificaciones.",
         );
+        if (result.sessionEnds) {
+          logoutStartedRef.current = false;
+          setSessionEnds(true);
+        }
         router.refresh();
       });
     });
@@ -2777,6 +2824,19 @@ function RollCall({
     <>
       {confirmationDialog}
       <div className="page-intro"><div><p className="eyebrow">ASISTENCIA DEL GRUPO</p><h1>Pase de lista</h1><p>Registra inasistencias de forma individual o masiva y oficializa al terminar.</p></div></div>
+      {sessionEnds && (
+        <div className="notice notice-error" role="alert" aria-live="assertive">
+          <Icon name="lock" />
+          <div>
+            <strong>Tu sesión se cerrará en {logoutCountdown} segundos</strong>
+            <p>Oficializaste la asistencia de todos tus grupos hoy. Puedes cerrar sesión ahora o quedarte en el sistema.</p>
+            <div className="confirmation-actions">
+              <button className="secondary-button" type="button" onClick={cancelSessionEnd}>Quedarme</button>
+              <button className="danger-confirm-button" type="button" onClick={logoutNow}>Cerrar sesión ahora</button>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="panel roll-card">
         <div className="roll-toolbar">
           <label>Grupo asignado<select value={group} onChange={(e) => { setGroup(e.target.value); setDraft({}); setNotice(""); }}>{availableGroups.map((option) => <option key={option}>{option}</option>)}</select></label>
