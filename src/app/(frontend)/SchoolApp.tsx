@@ -1710,7 +1710,7 @@ function UserManagement({
                 <span className={`role-badge role-${user.role.toLowerCase().replaceAll(" ", "-")}`}>{user.role}{user.active === false && <span className="group-badge"> Bloqueado</span>}</span>
                 {user.role === "Directivo"
                   ? <span className="security-note"><Icon name="lock" size={15} /> No disponible</span>
-                  : <div className="student-row-actions">
+                  : <div className="user-access-actions">
                       <button className="reset-password-button" type="button" onClick={() => selectPasswordReset(user)}><Icon name="lock" size={15} /> Restablecer contraseña</button>
                       {canToggleActive(user) && (
                         <button className="reset-password-button" type="button" onClick={() => toggleUserActive(user)} disabled={activePending}>

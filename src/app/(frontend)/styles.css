@@ -445,7 +445,7 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
 .group-name-preview strong { color: #205844; }
 .user-management-layout { grid-template-columns: minmax(300px, .7fr) minmax(460px, 1.3fr); }
 .security-note { display: inline-flex; align-items: center; gap: 6px; color: #527369; background: #edf5f1; border-radius: 999px; padding: 7px 10px; font-size: 9px; font-weight: 700; }
-.user-access-head, .user-access-row { display: grid; grid-template-columns: minmax(200px, 1fr) 135px 105px; align-items: center; gap: 12px; padding: 12px 20px; }
+.user-access-head, .user-access-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, max-content) minmax(0, max-content); align-items: center; gap: 12px; padding: 12px 20px; }
 .user-access-head { color: var(--color-table-head-text); background: var(--color-table-head-bg); border-bottom: 1px solid var(--color-table-row-border); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
 .user-access-row { min-height: 64px; border-bottom: 1px solid var(--color-table-row-border); }
 .user-access-row:last-child { border-bottom: 0; }
@@ -458,6 +458,8 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
 .role-directivo { color: #284c72; background: #eaf1f8; border-color: #d2e0ee; }
 .reset-password-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: #315e4f; background: white; border: 1px solid #cfdcd7; border-radius: 7px; padding: 7px 8px; font-size: 8px; font-weight: 700; }
 .reset-password-button:hover { color: #174c3b; background: #f2f7f5; border-color: #9cb8ad; }
+.user-access-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0; }
+.user-access-actions > .reset-password-button { flex: 0 0 auto; white-space: nowrap; }
 .password-reset-box { margin: 18px; padding: 17px; background: #f7faf8; border: 1px solid #dce7e2; border-radius: 10px; }
 .password-reset-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .password-reset-head small, .password-reset-head strong, .password-reset-head span { display: block; }
@@ -853,8 +855,8 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
   .teacher-group-grid { grid-template-columns: 1fr; }
   .student-management-head { display: none; }
   .user-access-head { display: none; }
-  .user-access-row { grid-template-columns: 1fr auto; padding: 13px 15px; }
-  .user-access-row .reset-password-button { grid-column: 2; }
+  .user-access-row { grid-template-columns: minmax(0, 1fr) minmax(0, max-content); padding: 13px 15px; }
+  .user-access-row .user-access-actions { grid-column: 2; justify-content: flex-end; }
   .password-reset-fields { grid-template-columns: 1fr; }
   .student-management-row { grid-template-columns: auto minmax(0, 1fr) auto; padding: 13px 15px; }
   .student-management-row > div:nth-child(2) { grid-column: 2; }
