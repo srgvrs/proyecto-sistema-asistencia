@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import schoolLogo from "./school-logo.png";
-import { createUserAction, loginAction, logoutAction, resetUserPasswordAction } from "./auth-actions";
+import { createUserAction, loginAction, logoutAction, resetUserPasswordAction, setUserActiveAction } from "./auth-actions";
 import {
   assignTeacherToGroupAction,
   createAttendanceAction,
@@ -1567,8 +1567,15 @@ function UserManagement({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetPending, setResetPending] = useState(false);
   const [resetNotice, setResetNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [activePending, setActivePending] = useState(false);
+  const [activeNotice, setActiveNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const sortedUsers = users.slice().sort((a, b) => a.username.localeCompare(b.username, "es-MX", { sensitivity: "base" }));
   const { requestConfirmation, confirmationDialog } = useConfirmation();
+  const activeDirectivos = users.filter((user) => user.role === "Directivo" && user.active !== false);
+  const lastActiveDirectivoId = activeDirectivos.length === 1 ? activeDirectivos[0].id : null;
+  const currentUserId = users.find((user) => user.role === "Directivo")?.id;
+  const canToggleActive = (user: AppUserSummary) =>
+    user.role !== "Directivo" || (user.id !== lastActiveDirectivoId && user.id !== currentUserId);
 
   const createUser = async () => {
     setPending(true);
@@ -1645,6 +1652,34 @@ function UserManagement({
     setResetNotice(null);
   };
 
+  const toggleUserActive = (user: AppUserSummary) => {
+    const nextActive = user.active === false;
+    requestConfirmation({
+      title: nextActive ? "Desbloquear acceso" : "Bloquear acceso",
+      message: nextActive
+        ? `Se restaurará el acceso de @${user.username} al sistema. ¿Deseas continuar?`
+        : `Se bloqueará el acceso de @${user.username}. No podrá iniciar sesión hasta que lo desbloquees. ¿Deseas continuar?`,
+      confirmLabel: nextActive ? "Sí, desbloquear" : "Sí, bloquear",
+      tone: nextActive ? "default" : "danger",
+    }, async () => {
+      setActivePending(true);
+      setActiveNotice(null);
+      const result = await setUserActiveAction({ userId: user.id, active: nextActive });
+      setActivePending(false);
+      if (!result.ok) {
+        setActiveNotice({ type: "error", text: result.error });
+        return;
+      }
+      setUsers((current) => current.map((item) => item.id === result.user.id ? result.user : item));
+      setActiveNotice({
+        type: "success",
+        text: nextActive
+          ? `El acceso de @${user.username} fue desbloqueado.`
+          : `El acceso de @${user.username} fue bloqueado.`,
+      });
+    });
+  };
+
   return (
     <>
       {confirmationDialog}
@@ -1666,15 +1701,23 @@ function UserManagement({
         </form>
         <section className="panel management-list user-list">
           <div className="panel-head"><div><p className="eyebrow">CUENTAS REGISTRADAS</p><h2>Personal con acceso</h2></div><span className="security-note"><Icon name="lock" size={15} /> Contraseñas protegidas</span></div>
+          {activeNotice && <div className={`notice notice-${activeNotice.type}`}><Icon name={activeNotice.type === "success" ? "check" : "alert"} /><div><strong>{activeNotice.type === "success" ? "Acceso actualizado" : "Revisa la información"}</strong><p>{activeNotice.text}</p></div></div>}
           <div className="user-access-table">
             <div className="user-access-head"><span>Usuario</span><span>Rol asignado</span><span>Recuperación</span></div>
             {sortedUsers.map((user) => (
               <div className="user-access-row" key={user.id}>
                 <div><span className="avatar">{user.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><span><strong>{user.name}</strong><small>@{user.username}</small></span></div>
-                <span className={`role-badge role-${user.role.toLowerCase().replaceAll(" ", "-")}`}>{user.role}</span>
+                <span className={`role-badge role-${user.role.toLowerCase().replaceAll(" ", "-")}`}>{user.role}{user.active === false && <span className="group-badge"> Bloqueado</span>}</span>
                 {user.role === "Directivo"
                   ? <span className="security-note"><Icon name="lock" size={15} /> No disponible</span>
-                  : <button className="reset-password-button" type="button" onClick={() => selectPasswordReset(user)}><Icon name="lock" size={15} /> Restablecer contraseña</button>}
+                  : <div className="student-row-actions">
+                      <button className="reset-password-button" type="button" onClick={() => selectPasswordReset(user)}><Icon name="lock" size={15} /> Restablecer contraseña</button>
+                      {canToggleActive(user) && (
+                        <button className="reset-password-button" type="button" onClick={() => toggleUserActive(user)} disabled={activePending}>
+                          <Icon name={user.active === false ? "check" : "lock"} size={15} /> {user.active === false ? "Desbloquear" : "Bloquear acceso"}
+                        </button>
+                      )}
+                    </div>}
               </div>
             ))}
           </div>

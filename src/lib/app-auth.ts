@@ -13,6 +13,7 @@ export const toAppUserSummary = (user: User): AppUserSummary => ({
   name: user.name,
   role: user.role,
   username: user.username,
+  active: user.active ?? true,
 })
 
 export const createAppAuth = (collection: "users") => ({
@@ -30,6 +31,7 @@ export const createAppAuth = (collection: "users") => ({
     })
     console.log("AUTH user", user?.id, (user as any)?.collection, (user as any)?.role)
     if (!user || user.collection !== collection) return null
+    if ((user as User).active === false) return null
     return user as User
   },
 

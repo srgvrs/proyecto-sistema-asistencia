@@ -5,4 +5,5 @@ export type AppUserSummary = {
   name: string
   role: Role
   username: string
+  active?: boolean | null
 }

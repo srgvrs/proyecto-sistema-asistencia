@@ -17,6 +17,10 @@ export async function loginAction(username: string, password: string): Promise<A
 
   try {
     const user = await appAuth.login(normalizedUsername, password)
+    if (user.active === false) {
+      await appAuth.logout()
+      return { ok: false, error: "Tu acceso fue desactivado. Contacta a la dirección." }
+    }
     const users = await listUsersForDirectivo(user)
     return { ok: true, user: toAppUserSummary(user), users }
   } catch {
@@ -66,6 +70,72 @@ export async function createUserAction(input: {
       ? "Ese nombre de usuario ya está registrado."
       : "No fue posible crear el usuario. Revisa la información."
     return { ok: false, error: message }
+  }
+}
+
+export async function setUserActiveAction(input: {
+  userId: string
+  active: boolean
+}): Promise<{ ok: true; user: AppUserSummary } | { ok: false; error: string }> {
+  const currentUser = await appAuth.currentUser()
+  if (!currentUser || currentUser.role !== "Directivo") {
+    return { ok: false, error: "No tienes permiso para cambiar el acceso de usuarios." }
+  }
+  if (!input || typeof input.userId !== "string" || typeof input.active !== "boolean") {
+    return { ok: false, error: "Los datos del cambio de acceso no son válidos." }
+  }
+  const numericId = Number(input.userId)
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return { ok: false, error: "Identificador inválido." }
+  }
+  if (String(currentUser.id) === String(numericId)) {
+    return { ok: false, error: "No puedes cambiar el acceso de tu propia cuenta." }
+  }
+
+  try {
+    const payload = await getPayload({ config })
+    const target = await payload.findByID({
+      collection: "users",
+      id: numericId,
+      depth: 0,
+      overrideAccess: false,
+      user: currentUser,
+    })
+    if (!target) {
+      return { ok: false, error: "El usuario no existe." }
+    }
+    if (target.role === "Directivo" && input.active === false) {
+      const directivos = await payload.find({
+        collection: "users",
+        where: {
+          and: [
+            { role: { equals: "Directivo" } },
+            { active: { not_equals: false } },
+          ],
+        },
+        limit: 2,
+        depth: 0,
+        overrideAccess: false,
+        user: currentUser,
+      })
+      if (directivos.docs.length <= 1) {
+        return { ok: false, error: "No puedes bloquear al último Directivo activo." }
+      }
+    }
+    const updated = await payload.update({
+      collection: "users",
+      id: numericId,
+      data: { active: input.active },
+      overrideAccess: false,
+      user: currentUser,
+    })
+    return { ok: true, user: toAppUserSummary(updated) }
+  } catch (error) {
+    console.error(
+      "SET USER ACTIVE ERROR",
+      error instanceof Error ? error.message : String(error),
+    )
+    return { ok: false, error: "No fue posible actualizar el acceso del usuario." }
   }
 }
 

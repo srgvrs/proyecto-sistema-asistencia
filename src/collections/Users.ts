@@ -1,13 +1,21 @@
 import { APIError, type Access, type CollectionConfig } from "payload"
 
+const isActiveUser = (user: { active?: boolean | null } | null | undefined) =>
+  user?.active !== false
+
 const isDirectivo: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
-  return req.user?.collection === "users" && req.user.role === "Directivo"
+  return (
+    req.user?.collection === "users" &&
+    isActiveUser(req.user) &&
+    req.user.role === "Directivo"
+  )
 }
 
 const directivoOrSelf: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
+  if (!isActiveUser(req.user)) return false
   if (req.user.role === "Directivo") return true
   return { id: { equals: req.user.id } }
 }
@@ -63,6 +71,18 @@ export const Users: CollectionConfig = {
       admin: {
         description: "Solo aplica a docentes. Los directivos y vigilantes permanecen como Activo.",
         condition: (data) => data?.role === "Docente",
+      },
+    },
+    {
+      name: "active",
+      label: "Acceso activo",
+      type: "checkbox",
+      required: false,
+      defaultValue: true,
+      index: true,
+      saveToJWT: true,
+      admin: {
+        description: "Si se desactiva, el usuario no podrá iniciar sesión ni operar en el sistema.",
       },
     },
   ],
