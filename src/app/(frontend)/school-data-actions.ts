@@ -841,7 +841,7 @@ export async function officializeAttendanceAction(
 > {
   const user = await appAuth.currentUser()
   if (!user || user.role !== "Docente") {
-    return { ok: false, error: "Solo un docente puede oficializar la asistencia." }
+    return { ok: false, error: "Solo un docente puede oficializar la asistencia.", sessionEnds: false }
   }
   if (!isString(input.group) || !isISODate(input.date) || !Array.isArray(input.attendance) || input.attendance.length > 500) {
     return { ok: false, error: "La asistencia enviada no tiene un formato válido.", sessionEnds: false }
