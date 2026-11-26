@@ -35,7 +35,8 @@ import { DEFAULT_DIRECTOR_NAME, todayISO } from "@/lib/school-data-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
-import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
+import { DateRangeFilter } from "./DateRangeFilter";
+import type { DateRange } from "@/lib/date-range";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
 type NavigationItem = { view: View; icon: string; label: string; description: string; keywords: string };

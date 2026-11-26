@@ -5,7 +5,7 @@ import SchoolApp, { type ReportTemplate } from "./SchoolApp"
 import { appAuth, listUsersForDirectivo, toAppUserSummary } from "@/lib/app-auth"
 import { loadSchoolStateAction } from "./school-data-actions"
 import type { SchoolStateData } from "@/lib/school-data-types"
-import { getDefaultDateRange, validateDateRange, type DateRange } from "./DateRangeFilter"
+import { getDefaultDateRange, validateDateRange, type DateRange } from "@/lib/date-range"
 
 type HomePageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
