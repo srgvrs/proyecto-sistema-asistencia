@@ -11,7 +11,11 @@ const readVisitors: Access = ({ req }) => {
 
 const createVisitors: Access = ({ req }) => {
   if (req.user?.collection !== "users") return false
-  return req.user.role === "Directivo" || req.user.role === "Vigilante de Acceso"
+  return (
+    req.user.role === "Directivo" ||
+    req.user.role === "Vigilante de Acceso" ||
+    req.user.role === "Docente"
+  )
 }
 
 const updateVisitors: Access = ({ req }) => {

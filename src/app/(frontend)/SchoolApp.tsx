@@ -395,7 +395,7 @@ function App({
 
   const navigationItems: NavigationItem[] = [
     { view: "inicio", icon: "home", label: "Resumen", description: "Panel principal y actividad reciente", keywords: "inicio dashboard principal" },
-    ...(session.role !== "Docente" ? [{ view: "visitantes" as const, icon: "badge", label: session.role === "Directivo" ? "Personas ingresadas" : "Personas externas", description: "Consulta y control de accesos", keywords: "visitantes acceso entrada salida vigilancia" }] : [{ view: "visitantes" as const, icon: "badge", label: "Visitas por autorizar", description: "Autoriza o rechaza las visitas dirigidas a ti", keywords: "visitantes autorizar rechazar visitas docente" }]),
+    ...(session.role !== "Docente" ? [{ view: "visitantes" as const, icon: "badge", label: session.role === "Directivo" ? "Personas ingresadas" : "Personas externas", description: "Consulta y control de accesos", keywords: "visitantes acceso entrada salida vigilancia" }] : [{ view: "visitantes" as const, icon: "badge", label: "Visitas", description: "Registra y autoriza las visitas dirigidas a ti", keywords: "visitantes autorizar rechazar visitas docente" }]),
     ...(session.role === "Docente" ? [
       { view: "lista" as const, icon: "users", label: "Pase de lista", description: "Registrar asistencia del alumnado", keywords: "asistencia alumnos presentes faltas retardos" },
       { view: "alumnos" as const, icon: "plus", label: "Agregar alumno a la lista", description: "Administrar alumnos de tus grupos", keywords: "alta estudiante padrón grupo" },
@@ -457,7 +457,7 @@ function App({
           </button>
           <div className="topbar-title">
             <span>Sistema de asistencia</span>
-            <strong>{view === "inicio" ? "Resumen" : view === "visitantes" ? "Personas externas" : view === "lista" ? "Pase de lista" : view === "listas-oficiales" ? "Listas oficiales" : view === "alumnos" ? "Agregar alumno a la lista" : view === "grupos" ? "Agregar grupo a docente" : view === "catalogo" ? "Grupos y alumnos" : view === "personal" ? "Gestión de docentes" : view === "usuarios" ? "Usuarios y accesos" : view === "cierre-ciclo" ? "Cerrar ciclo escolar" : view === "docentes" ? session.role === "Directivo" ? "Asistencia Docentes" : "Registrar entrada docente" : "Reportes"}</strong>
+            <strong>{view === "inicio" ? "Resumen" : view === "visitantes" ? (session.role === "Docente" ? "Visitas" : "Personas externas") : view === "lista" ? "Pase de lista" : view === "listas-oficiales" ? "Listas oficiales" : view === "alumnos" ? "Agregar alumno a la lista" : view === "grupos" ? "Agregar grupo a docente" : view === "catalogo" ? "Grupos y alumnos" : view === "personal" ? "Gestión de docentes" : view === "usuarios" ? "Usuarios y accesos" : view === "cierre-ciclo" ? "Cerrar ciclo escolar" : view === "docentes" ? session.role === "Directivo" ? "Asistencia Docentes" : "Registrar entrada docente" : "Reportes"}</strong>
           </div>
           <div className="navigation-search" onFocus={() => setSearchOpen(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchOpen(false); }}>
             <Icon name="search" size={18} />
@@ -520,6 +520,7 @@ function App({
                 canDelete={session.role === "Directivo"}
                 canAuthorize={session.role === "Directivo" || session.role === "Docente"}
                 currentUserId={session.id}
+                currentUserName={session.name}
                 currentUserRole={session.role}
               />
             </>
@@ -983,6 +984,7 @@ function VisitorRegistry({
   canDelete,
   canAuthorize,
   currentUserId,
+  currentUserName,
   currentUserRole,
 }: {
   visitors: Visitor[];
@@ -991,6 +993,7 @@ function VisitorRegistry({
   canDelete: boolean;
   canAuthorize: boolean;
   currentUserId: string;
+  currentUserName: string;
   currentUserRole: Role;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -999,25 +1002,28 @@ function VisitorRegistry({
   const [reason, setReason] = useState("");
   const [host, setHost] = useState("");
   const [hostUserId, setHostUserId] = useState("");
+  const [authorizeEntry, setAuthorizeEntry] = useState(true);
   const [search, setSearch] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const { requestConfirmation, confirmationDialog } = useConfirmation();
+  const isDocente = currentUserRole === "Docente";
 
   const registerVisitor = (e: React.FormEvent) => {
     e.preventDefault();
     const now = new Date();
     const entryTime = now.toISOString();
-    setNotice("");
+    setNotice(null);
     startTransition(async () => {
       const result = await createVisitorAction({
         name: name.trim(),
         reason: reason.trim(),
         entryTime,
-        host: host.trim(),
-        hostUserId: hostUserId || null,
+        host: isDocente ? undefined : host.trim(),
+        hostUserId: isDocente ? null : (hostUserId || null),
+        authorizeEntry: currentUserRole === "Directivo" ? authorizeEntry : undefined,
       });
       if (!result.ok) {
-        setNotice(result.error);
+        setNotice({ type: "error", text: result.error });
         return;
       }
       setVisitors((current) => [{
@@ -1029,7 +1035,8 @@ function VisitorRegistry({
       setReason("");
       setHost("");
       setHostUserId("");
-      setNotice("La entrada de la persona externa fue registrada correctamente.");
+      setAuthorizeEntry(true);
+      setNotice({ type: "success", text: "La entrada de la persona externa fue registrada correctamente." });
     });
   };
 
@@ -1043,7 +1050,7 @@ function VisitorRegistry({
       startTransition(async () => {
         const result = await updateVisitorAction(visitor.id, { exitTime });
         if (!result.ok) {
-          setNotice(result.error);
+          setNotice({ type: "error", text: result.error });
           return;
         }
         setVisitors((current) => current.map((item) => item.id === visitor.id ? { ...item, exitTime: result.visitor.exitTime } : item));
@@ -1063,7 +1070,7 @@ function VisitorRegistry({
       startTransition(async () => {
         const result = await authorizeVisitorAction({ visitorId: visitor.id, decision });
         if (!result.ok) {
-          setNotice(result.error);
+          setNotice({ type: "error", text: result.error });
           return;
         }
         setVisitors((current) => current.map((item) => item.id === result.visitor.id ? { ...item, ...result.visitor } : item));
@@ -1087,7 +1094,7 @@ function VisitorRegistry({
       startTransition(async () => {
         const result = await deleteVisitorAction(visitor.id);
         if (!result.ok) {
-          setNotice(result.error);
+          setNotice({ type: "error", text: result.error });
           return;
         }
         setVisitors((current) => current.filter((item) => item.id !== visitor.id));
@@ -1130,12 +1137,21 @@ function VisitorRegistry({
         {!readOnly && <form className="panel visitor-form" onSubmit={registerVisitor}>
           <div className="panel-head"><div><p className="eyebrow">NUEVO REGISTRO</p><h2>Datos de la persona</h2></div><span className="form-icon"><Icon name="badge" /></span></div>
           <div className="visitor-fields">
-            {notice && <div className="notice notice-success visitor-notice"><Icon name="check" /><div><strong>Entrada registrada</strong><p>{notice}</p></div></div>}
-            <label>Nombre completo<input required value={name} onChange={(e) => { setName(e.target.value); setNotice(""); }} placeholder="Nombre y apellidos" /></label>
+            {notice && <div className={`notice notice-${notice.type} visitor-notice`}><Icon name={notice.type === "success" ? "check" : "alert"} /><div><strong>{notice.type === "success" ? "Entrada registrada" : "No se pudo registrar"}</strong><p>{notice.text}</p></div></div>}
+            <label>Nombre completo<input required value={name} onChange={(e) => { setName(e.target.value); setNotice(null); }} placeholder="Nombre y apellidos" /></label>
             <label>Identificación presentada<input required value={identification} onChange={(e) => setIdentification(e.target.value)} placeholder="Ej. INE · últimos 4 dígitos" /></label>
             <label>Motivo de la visita<textarea required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Describe brevemente el motivo" rows={3} /></label>
-            <label>Persona o área que visita<input required value={host} onChange={(e) => setHost(e.target.value)} placeholder="Nombre del docente o área" /></label>
-            <label>Docente o directivo visitado (opcional)<input value={hostUserId} onChange={(e) => setHostUserId(e.target.value)} placeholder="ID de usuario (opcional)" /></label>
+            {isDocente ? (
+              <div className="entry-preview"><Icon name="badge" /><div><small>AUTORIZACIÓN</small><strong>Autorizas la entrada como: {currentUserName}</strong></div></div>
+            ) : (
+              <>
+                <label>Persona o área que visita<input required value={host} onChange={(e) => setHost(e.target.value)} placeholder="Nombre del docente o área" /></label>
+                <label>Docente o directivo visitado (opcional)<input value={hostUserId} onChange={(e) => setHostUserId(e.target.value)} placeholder="ID de usuario (opcional)" /></label>
+                {currentUserRole === "Directivo" && (
+                  <label className="egresados-toggle"><input type="checkbox" checked={authorizeEntry} onChange={(e) => setAuthorizeEntry(e.target.checked)} /> Autorizo entrada: {currentUserName}</label>
+                )}
+              </>
+            )}
             <div className="entry-preview"><Icon name="clock" /><div><small>FECHA Y HORA DE ENTRADA</small><strong>Se asignarán automáticamente al confirmar</strong></div></div>
             <button className="primary-button" type="submit" disabled={isPending}><Icon name="check" size={18} /> {isPending ? "Guardando…" : "Registrar entrada"}</button>
           </div>

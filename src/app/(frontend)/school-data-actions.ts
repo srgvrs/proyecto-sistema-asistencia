@@ -2048,13 +2048,14 @@ type VisitorInput = {
   exitTime?: string | null
   host?: string
   hostUserId?: string | null
+  authorizeEntry?: boolean
 }
 
 export async function createVisitorAction(
   input: VisitorInput,
 ): Promise<{ ok: true; visitor: Visitor } | { ok: false; error: string }> {
   const user = await appAuth.currentUser()
-  if (!user || (user.role !== "Directivo" && user.role !== "Vigilante de Acceso")) {
+  if (!user || (user.role !== "Directivo" && user.role !== "Vigilante de Acceso" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para registrar visitantes." }
   }
   if (!isString(input.name) || !isString(input.reason) || !isISODateTime(input.entryTime)) {
@@ -2095,25 +2096,54 @@ export async function createVisitorAction(
         return { ok: false, error: "El docente o directivo visitado no existe." }
       }
     }
+
+    const now = new Date().toISOString()
+    const data: Record<string, unknown> = {
+      name: input.name.trim(),
+      reason: input.reason.trim(),
+      entryTime: input.entryTime,
+      exitTime: input.exitTime || null,
+      registeredBy: user.id,
+    }
+
+    if (user.role === "Docente") {
+      data.host = user.name
+      data.hostUser = user.id
+      data.authorizationStatus = "Autorizada"
+      data.authorizedBy = user.id
+      data.authorizedByName = user.name
+      data.authorizedAt = now
+    } else if (user.role === "Vigilante de Acceso") {
+      data.host = host || undefined
+      data.hostUser = hostUserId ?? undefined
+      data.authorizationStatus = "Pendiente"
+    } else {
+      const authorizeEntry = input.authorizeEntry !== false
+      data.host = host || undefined
+      data.hostUser = hostUserId ?? undefined
+      if (authorizeEntry) {
+        data.authorizationStatus = "Autorizada"
+        data.authorizedBy = user.id
+        data.authorizedByName = user.name
+        data.authorizedAt = now
+      } else {
+        data.authorizationStatus = "Pendiente"
+      }
+    }
+
     const doc = await payload.create({
       collection: "visitors",
-      data: {
-        name: input.name.trim(),
-        reason: input.reason.trim(),
-        entryTime: input.entryTime,
-        exitTime: input.exitTime || null,
-        host: host || undefined,
-        hostUser: hostUserId ?? undefined,
-        authorizationStatus: "Pendiente",
-        registeredBy: user.id,
-      },
+      data,
       overrideAccess: false,
       user,
     })
     return { ok: true, visitor: mapVisitorDoc(doc as VisitorDoc) }
   } catch (error: any) {
-    console.error("CREATE VISITOR ERROR", error?.message)
-    return { ok: false, error: "No fue posible registrar al visitante." }
+    console.error(
+      "CREATE VISITOR ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return { ok: false, error: error?.data?.errors?.[0]?.message || error?.message || "No fue posible registrar al visitante." }
   }
 }
 
