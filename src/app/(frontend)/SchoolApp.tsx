@@ -283,7 +283,6 @@ function App({
   const [rangeError, setRangeError] = useState("");
   const [groupMode, setGroupMode] = useState<GroupMode>("dia");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number>(() => Date.now());
-  const [refreshPending, setRefreshPending] = useState(false);
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
   const directorName = schoolState.directorName;
   const teacherIds = useMemo<Record<string, string>>(() => {
@@ -324,16 +323,6 @@ function App({
       console.error("REFRESH SCHOOL STATE ERROR", error);
     }
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
-
-  const manualRefresh = useCallback(async () => {
-    if (refreshPending) return;
-    setRefreshPending(true);
-    try {
-      await refreshSchoolState();
-    } finally {
-      setRefreshPending(false);
-    }
-  }, [refreshPending, refreshSchoolState]);
 
   const loadRange = useCallback(async (range: DateRange) => {
     setRangeError("");
@@ -493,21 +482,6 @@ function App({
               </div>
             )}
           </div>
-          {isReadOnlyView && (
-            <div className="refresh-controls">
-              <button
-                type="button"
-                className={`refresh-icon-button ${refreshPending ? "is-refreshing" : ""}`}
-                onClick={manualRefresh}
-                disabled={refreshPending}
-                aria-busy={refreshPending}
-                aria-label={refreshPending ? "Actualizando…" : "Actualizar"}
-                title={refreshPending ? "Actualizando…" : `Actualizar · ${refreshedLabel}`}
-              >
-                <Icon name="refresh" size={18} />
-              </button>
-            </div>
-          )}
           <AccessibilityControls variant="topbar" />
           <div className="user-chip">
             <span>{session.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
