@@ -30,7 +30,7 @@ import {
   updateVisitorAction,
 } from "./school-data-actions";
 import type { AppUserSummary, Role } from "@/lib/app-user-types";
-import { todayISO } from "@/lib/school-data-types";
+import { DEFAULT_DIRECTOR_NAME, todayISO } from "@/lib/school-data-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
@@ -87,6 +87,7 @@ const getSchoolStateWithDefaults = (state?: Partial<SchoolStateData> | null): Sc
   teacherAttendance: state?.teacherAttendance ?? [],
   teacherGroups: state?.teacherGroups ?? {},
   teachers: state?.teachers ?? [],
+  directorName: state?.directorName?.trim() || DEFAULT_DIRECTOR_NAME,
 });
 const formatDate = (date: string) =>
   new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(
@@ -264,6 +265,7 @@ function App({
   const [teacherAttendance, setTeacherAttendance, replaceTeacherAttendance] = useSyncedSchoolSection("teacherAttendance", schoolState.teacherAttendance);
   const [teacherGroups, setTeacherGroups, replaceTeacherGroups] = useSyncedSchoolSection("teacherGroups", schoolState.teacherGroups);
   const [teachers, setTeachers, replaceTeachers] = useSyncedSchoolSection("teachers", schoolState.teachers);
+  const directorName = schoolState.directorName;
   const teacherIds = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     for (const user of users) {
@@ -436,6 +438,7 @@ function App({
               replaceOfficialLists={replaceOfficialLists}
               students={students}
               groups={teacherGroups[session.name] || []}
+              directorName={directorName}
             />
           )}
           {view === "listas-oficiales" && session.role === "Directivo" && (
@@ -444,6 +447,7 @@ function App({
               groups={groups.map((group) => group.name)}
               canCorrect={session.role === "Directivo"}
               replaceOfficialLists={replaceOfficialLists}
+              directorName={directorName}
             />
           )}
           {view === "alumnos" && session.role === "Docente" && (
@@ -2012,7 +2016,6 @@ function TeacherGroupManagement({
   );
 }
 
-const SCHOOL_DIRECTOR = "MTRO. OSCAR HERRERA GAYTÁN";
 const weekdayInitials = ["D", "L", "M", "M", "J", "V", "S"];
 
 const getMonthSchoolDays = (month: string) => {
@@ -2048,7 +2051,7 @@ const getOfficialSheetRows = (list: OfficialAttendanceList) =>
     (_, index) => list.students[index],
   );
 
-async function generateOfficialAttendancePdf(list: OfficialAttendanceList) {
+async function generateOfficialAttendancePdf(list: OfficialAttendanceList, directorName: string) {
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const document = await PDFDocument.create();
   const page = document.addPage([612, 792]);
@@ -2194,19 +2197,20 @@ async function generateOfficialAttendancePdf(list: OfficialAttendanceList) {
   page.drawLine({ start: { x: 354, y: footerTop - 39 }, end: { x: 550, y: footerTop - 39 }, thickness: 0.6, color: rgb(0.1, 0.1, 0.1) });
   const teacherLabel = `PROF. ${list.teacher.toUpperCase()}`;
   page.drawText(teacherLabel, { x: 166 - (boldFont.widthOfTextAtSize(teacherLabel, 6.2) / 2), y: footerTop - 49, size: 6.2, font: boldFont });
-  page.drawText(SCHOOL_DIRECTOR, { x: 452 - (boldFont.widthOfTextAtSize(SCHOOL_DIRECTOR, 6.2) / 2), y: footerTop - 49, size: 6.2, font: boldFont });
+  const directorLabel = directorName.toUpperCase();
+  page.drawText(directorLabel, { x: 452 - (boldFont.widthOfTextAtSize(directorLabel, 6.2) / 2), y: footerTop - 49, size: 6.2, font: boldFont });
 
   return document.save();
 }
 
-function OfficialListDownloadButton({ list, className = "primary-button" }: { list: OfficialAttendanceList; className?: string }) {
+function OfficialListDownloadButton({ list, directorName, className = "primary-button" }: { list: OfficialAttendanceList; directorName: string; className?: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const download = async () => {
     setPending(true);
     setError("");
     try {
-      const output = await generateOfficialAttendancePdf(list);
+      const output = await generateOfficialAttendancePdf(list, directorName);
       const pdfBytes = new Uint8Array(output.length);
       pdfBytes.set(output);
       const safeGroup = list.group.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
@@ -2227,7 +2231,7 @@ function OfficialListDownloadButton({ list, className = "primary-button" }: { li
   );
 }
 
-function OfficialAttendanceSheet({ list }: { list: OfficialAttendanceList }) {
+function OfficialAttendanceSheet({ list, directorName }: { list: OfficialAttendanceList; directorName: string }) {
   const schoolDays = getMonthSchoolDays(list.month);
   const sheetRows = getOfficialSheetRows(list);
   const [grade = "", groupLetter = ""] = list.group.split(/\s+/);
@@ -2277,7 +2281,7 @@ function OfficialAttendanceSheet({ list }: { list: OfficialAttendanceList }) {
         <span>Vo. Bo.</span>
         <div>
           <section><strong>MAESTRO DE GRUPO</strong><span className="signature-line"></span>{list.teacher ? <b>PROF. {list.teacher.toUpperCase()}</b> : null}</section>
-          <section><strong>DIRECTOR DE LA ESCUELA</strong><span className="signature-line"></span><b>{SCHOOL_DIRECTOR}</b></section>
+          <section><strong>DIRECTOR DE LA ESCUELA</strong><span className="signature-line"></span><b>{directorName.toUpperCase()}</b></section>
         </div>
       </footer>
     </section>
@@ -2289,11 +2293,13 @@ function OfficialListsArchive({
   groups,
   canCorrect,
   replaceOfficialLists,
+  directorName,
 }: {
   officialLists: OfficialAttendanceList[];
   groups: string[];
   canCorrect: boolean;
   replaceOfficialLists: (lists: OfficialAttendanceList[]) => void;
+  directorName: string;
 }) {
   const router = useRouter();
   const availableGroups = [...new Set([...groups, ...officialLists.map((list) => list.group)])].sort();
@@ -2396,7 +2402,7 @@ function OfficialListsArchive({
       {confirmationDialog}
       <div className="page-intro official-archive-intro">
         <div><p className="eyebrow">DOCUMENTACIÓN OFICIAL</p><h1>Listas oficiales</h1><p>Consulta por grupo las listas cerradas por el docente y listas para impresión.</p></div>
-        {selectedList && <OfficialListDownloadButton list={selectedList} />}
+        {selectedList && <OfficialListDownloadButton list={selectedList} directorName={directorName} />}
       </div>
       <section className="panel official-list-controls">
         <label>Grupo<select value={group} onChange={(event) => setGroup(event.target.value)}>{availableGroups.map((option) => <option key={option}>{option}</option>)}</select></label>
@@ -2418,7 +2424,7 @@ function OfficialListsArchive({
         </section>
       )}
       {selectedList
-        ? <OfficialAttendanceSheet list={selectedList} />
+        ? <OfficialAttendanceSheet list={selectedList} directorName={directorName} />
         : <section className="panel empty-state"><Icon name="calendar" /><strong>Sin listas oficializadas</strong><p>El grupo seleccionado aún no tiene pases de lista cerrados.</p></section>}
       {correctionDate && selectedList && (
         <div className="catalog-edit-backdrop" role="presentation" onMouseDown={() => !isPending && closeCorrection()}>
@@ -2482,6 +2488,7 @@ function RollCall({
   replaceOfficialLists,
   students,
   groups,
+  directorName,
 }: {
   records: AttendanceRecord[];
   setRecords: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>;
@@ -2490,6 +2497,7 @@ function RollCall({
   replaceOfficialLists: (lists: OfficialAttendanceList[]) => void;
   students: Student[];
   groups: string[];
+  directorName: string;
 }) {
   const availableGroups = useMemo(() => [...new Set(groups)].filter(Boolean).sort(), [groups]);
   const [group, setGroup] = useState(availableGroups[0] || "");
@@ -2606,8 +2614,8 @@ function RollCall({
       </section>
       {officialList && (
         <section className="official-list-preview">
-          <div className="official-list-preview-head"><div><p className="eyebrow">FORMATO INSTITUCIONAL</p><h2>Lista oficial del mes</h2></div><OfficialListDownloadButton list={officialList} className="secondary-button" /></div>
-          <OfficialAttendanceSheet list={officialList} />
+          <div className="official-list-preview-head"><div><p className="eyebrow">FORMATO INSTITUCIONAL</p><h2>Lista oficial del mes</h2></div><OfficialListDownloadButton list={officialList} directorName={directorName} className="secondary-button" /></div>
+          <OfficialAttendanceSheet list={officialList} directorName={directorName} />
         </section>
       )}
     </>

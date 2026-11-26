@@ -18,6 +18,7 @@ import { OfficialListCorrections } from './collections/OfficialListCorrections'
 import { TeacherAttendance } from './collections/TeacherAttendance'
 import { TeacherJustifications } from './collections/TeacherJustifications'
 import { SchoolYearClosures } from './collections/SchoolYearClosures'
+import { SchoolSettings } from './globals/SchoolSettings'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -64,7 +65,7 @@ export default buildConfig({
     TeacherJustifications,
     SchoolYearClosures,
   ],
-  globals: [],
+  globals: [SchoolSettings],
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },

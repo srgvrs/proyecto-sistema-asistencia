@@ -80,7 +80,10 @@ export type SchoolStateData = {
   teacherAttendance: TeacherAttendance[]
   teacherGroups: Record<string, string[]>
   teachers: TeacherProfile[]
+  directorName: string
 }
+
+export const DEFAULT_DIRECTOR_NAME = "MTRO. OSCAR HERRERA GAYTÁN"
 
 export type SchoolStateSection = keyof SchoolStateData
 

@@ -15,6 +15,7 @@ import type {
   TeacherProfile,
   Visitor,
 } from "@/lib/school-data-types"
+import { DEFAULT_DIRECTOR_NAME } from "@/lib/school-data-types"
 
 const isString = (value: unknown): value is string => typeof value === "string"
 
@@ -1046,6 +1047,7 @@ export async function loadSchoolStateAction(): Promise<
       teachersResult,
       teacherAttendanceResult,
       teacherJustificationsResult,
+      schoolSettingsResult,
     ] = await Promise.all([
       safeFind({ collection: "groups", limit: 200, sort: "name", overrideAccess: false, user }),
       safeFind({ collection: "students", limit: 2000, sort: "paternalSurname", overrideAccess: false, user }),
@@ -1057,6 +1059,22 @@ export async function loadSchoolStateAction(): Promise<
       safeFind(teachersQuery),
       safeFind({ collection: "teacher-attendance", limit: 2000, sort: "-date", overrideAccess: false, user }),
       safeFind({ collection: "teacher-justifications", limit: 2000, sort: "-date", overrideAccess: false, user }),
+      (async () => {
+        try {
+          return await payload.findGlobal({
+            slug: "school-settings",
+            depth: 0,
+            overrideAccess: false,
+            user,
+          })
+        } catch (e) {
+          console.error(
+            "LOAD SCHOOL SETTINGS ERROR",
+            JSON.stringify((e as any)?.data?.errors ?? (e as any)?.message ?? e, null, 2),
+          )
+          return null
+        }
+      })(),
     ])
 
     const groups = (groupsResult.docs as GroupDoc[]).map((group) => ({ id: String(group.id), name: group.name }))
@@ -1137,6 +1155,11 @@ export async function loadSchoolStateAction(): Promise<
       }
     })
 
+    const configuredDirectorName = (schoolSettingsResult as { directorName?: string | null } | null)?.directorName
+    const directorName = (typeof configuredDirectorName === "string" && configuredDirectorName.trim())
+      ? configuredDirectorName.trim()
+      : DEFAULT_DIRECTOR_NAME
+
     console.log("LOAD", { groups: groups.length, students: students.length, teachers: teachers.length })
     return {
       ok: true,
@@ -1149,6 +1172,7 @@ export async function loadSchoolStateAction(): Promise<
         teacherAttendance,
         teacherGroups,
         teachers,
+        directorName,
       },
     }
   } catch (error: any) {
