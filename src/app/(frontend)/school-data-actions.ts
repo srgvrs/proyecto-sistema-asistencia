@@ -2192,28 +2192,44 @@ export async function updateVisitorAction(
   input: Partial<VisitorInput>,
 ): Promise<{ ok: true; visitor: Visitor } | { ok: false; error: string }> {
   const user = await appAuth.currentUser()
-  if (!user || (user.role !== "Directivo" && user.role !== "Vigilante de Acceso")) {
+  if (!user || (user.role !== "Directivo" && user.role !== "Vigilante de Acceso" && user.role !== "Docente")) {
     return { ok: false, error: "No tienes permiso para actualizar visitantes." }
   }
   if (!isString(id)) return { ok: false, error: "Identificador inválido." }
   const data: Record<string, unknown> = {}
-  if (isString(input.name)) data.name = input.name.trim()
-  if (isString(input.reason)) data.reason = input.reason.trim()
-  if (isISODateTime(input.entryTime)) data.entryTime = input.entryTime
+  if (user.role === "Directivo") {
+    if (isString(input.name)) data.name = input.name.trim()
+    if (isString(input.reason)) data.reason = input.reason.trim()
+    if (isISODateTime(input.entryTime)) data.entryTime = input.entryTime
+  }
   if (input.exitTime !== undefined) data.exitTime = input.exitTime || null
   if (!Object.keys(data).length) return { ok: false, error: "No hay cambios para guardar." }
   try {
     const payload = await getPayload({ config })
+    const existing = await payload.findByID({
+      collection: "visitors",
+      id,
+      depth: 0,
+      overrideAccess: false,
+      user,
+    }) as VisitorDoc | null
+    if (!existing) {
+      return { ok: false, error: "La visita no existe." }
+    }
     if (user.role === "Vigilante de Acceso") {
-      const existing = await payload.findByID({
-        collection: "visitors",
-        id,
-        depth: 0,
-        overrideAccess: true,
-        user,
-      }) as VisitorDoc | null
-      if (!existing || getRelationId(existing.registeredBy) !== String(user.id)) {
+      if (getRelationId(existing.registeredBy) !== String(user.id)) {
         return { ok: false, error: "No tienes permiso sobre este registro." }
+      }
+      if (Object.keys(data).some((key) => key !== "exitTime")) {
+        return { ok: false, error: "Solo puedes registrar la salida de la visita." }
+      }
+    }
+    if (user.role === "Docente") {
+      if (getRelationId(existing.hostUser) !== String(user.id)) {
+        return { ok: false, error: "Solo puedes actualizar las visitas dirigidas a ti." }
+      }
+      if (Object.keys(data).some((key) => key !== "exitTime")) {
+        return { ok: false, error: "Solo puedes registrar la salida de la visita." }
       }
     }
     const doc = await payload.update({
@@ -2282,7 +2298,8 @@ export async function authorizeVisitorAction(
         authorizedByName: user.name,
         authorizedAt: new Date().toISOString(),
       },
-      overrideAccess: true,
+      overrideAccess: false,
+      user,
     })
     return { ok: true, visitor: mapVisitorDoc(doc as VisitorDoc) }
   } catch (error: any) {

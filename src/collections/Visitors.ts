@@ -24,6 +24,9 @@ const updateVisitors: Access = ({ req }) => {
   if (req.user.role === "Vigilante de Acceso") {
     return { registeredBy: { equals: req.user.id } }
   }
+  if (req.user.role === "Docente") {
+    return { hostUser: { equals: req.user.id } }
+  }
   return false
 }
 
