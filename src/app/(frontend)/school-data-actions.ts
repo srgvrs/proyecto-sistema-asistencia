@@ -2645,13 +2645,10 @@ export async function previewSchoolYearCloseAction(
       overrideAccess: false,
       user,
     })
-    const studentsResult = await payload.find({
+    const studentsResult = await fetchAllPages<StudentDoc>(payload, {
       collection: "students",
-      limit: 5000,
       depth: 0,
-      overrideAccess: false,
-      user,
-    })
+    }, user)
     const previousClosuresResult = await payload.find({
       collection: "school-year-closures",
       where: { cycleLabel: { equals: getCycleLabel(todayISO()) } },
@@ -2663,7 +2660,7 @@ export async function previewSchoolYearCloseAction(
     })
 
     const groupDocs = groupsResult.docs as GroupDoc[]
-    const studentDocs = studentsResult.docs as StudentDoc[]
+    const studentDocs = studentsResult.docs
 
     const groupsByName = new Map<string, GroupDoc>()
     for (const group of groupDocs) groupsByName.set(group.name, group)
@@ -2927,16 +2924,13 @@ export async function closeSchoolYearAction(
       overrideAccess: false,
       user,
     })
-    const studentsResult = await payload.find({
+    const studentsResult = await fetchAllPages<StudentDoc>(payload, {
       collection: "students",
-      limit: 5000,
       depth: 0,
-      overrideAccess: false,
-      user,
-    })
+    }, user)
 
     const groupDocs = groupsResult.docs as GroupDoc[]
-    const studentDocs = studentsResult.docs as StudentDoc[]
+    const studentDocs = studentsResult.docs
 
     const groupsByName = new Map<string, GroupDoc>()
     for (const group of groupDocs) groupsByName.set(group.name, group)

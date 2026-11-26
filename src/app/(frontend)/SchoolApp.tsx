@@ -3616,12 +3616,17 @@ function SchoolYearClose({
   const loadPreview = useCallback((excludedIds: Set<string>) => {
     setError("");
     startTransition(async () => {
-      const result = await previewSchoolYearCloseAction({ excludedStudentIds: [...excludedIds] });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await previewSchoolYearCloseAction({ excludedStudentIds: [...excludedIds] });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setPreview(result.preview);
+      } catch (previewError) {
+        console.error("PREVIEW SCHOOL YEAR CLOSE ERROR", previewError);
+        setError("No fue posible generar la vista previa del cierre de ciclo.");
       }
-      setPreview(result.preview);
     });
   }, []);
 
@@ -3663,25 +3668,38 @@ function SchoolYearClose({
     setConfirmPending(true);
     setConfirmError("");
     startTransition(async () => {
-      const response = await closeSchoolYearAction({
-        excludedStudentIds: [...excluded],
-        confirmText,
-      });
-      confirmPendingRef.current = false;
-      setConfirmPending(false);
-      setConfirmOpen(false);
-      setConfirmText("");
-      setResult({
-        ok: response.ok,
-        error: response.ok ? undefined : response.error,
-        promoted: response.promoted,
-        graduated: response.graduated,
-        createdGroups: response.createdGroups,
-        errors: response.errors,
-      });
-      if (response.ok) {
-        await onRefresh();
-        loadPreview(excluded);
+      try {
+        const response = await closeSchoolYearAction({
+          excludedStudentIds: [...excluded],
+          confirmText,
+        });
+        setResult({
+          ok: response.ok,
+          error: response.ok ? undefined : response.error,
+          promoted: response.promoted,
+          graduated: response.graduated,
+          createdGroups: response.createdGroups,
+          errors: response.errors,
+        });
+        if (response.ok) {
+          await onRefresh();
+          loadPreview(excluded);
+        }
+      } catch (closeError) {
+        console.error("CLOSE SCHOOL YEAR ERROR", closeError);
+        setResult({
+          ok: false,
+          error: "No fue posible completar el cierre de ciclo.",
+          promoted: 0,
+          graduated: 0,
+          createdGroups: 0,
+          errors: [],
+        });
+      } finally {
+        confirmPendingRef.current = false;
+        setConfirmPending(false);
+        setConfirmOpen(false);
+        setConfirmText("");
       }
     });
   };
