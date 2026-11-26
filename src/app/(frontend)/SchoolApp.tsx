@@ -2571,6 +2571,7 @@ function RollCall({
   groups: string[];
   directorName: string;
 }) {
+  const router = useRouter();
   const availableGroups = useMemo(() => [...new Set(groups)].filter(Boolean).sort(), [groups]);
   const [group, setGroup] = useState(availableGroups[0] || "");
   const [date, setDate] = useState(todayISO());
