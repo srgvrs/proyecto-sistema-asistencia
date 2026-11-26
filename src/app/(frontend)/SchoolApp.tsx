@@ -20,6 +20,7 @@ import {
   deleteVisitorAction,
   closeSchoolYearAction,
   loadOfficialAttendanceStatusAction,
+  loadRangeDataAction,
   loadSchoolStateAction,
   previewSchoolYearCloseAction,
   officializeAttendanceAction,
@@ -34,6 +35,7 @@ import { DEFAULT_DIRECTOR_NAME, todayISO } from "@/lib/school-data-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
+import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
 type NavigationItem = { view: View; icon: string; label: string; description: string; keywords: string };
@@ -244,11 +246,13 @@ function App({
   initialSession = null,
   initialUsers = [],
   initialSchoolState = null,
+  initialDateRange,
 }: {
   initialTemplates?: ReportTemplate[];
   initialSession?: AppUserSummary | null;
   initialUsers?: AppUserSummary[];
   initialSchoolState?: SchoolStateData | null;
+  initialDateRange: DateRange;
 }) {
   const [session, setSession] = useState<AppUserSummary | null>(initialSession);
   const [users, setUsers] = useState<AppUserSummary[]>(initialUsers);
@@ -265,6 +269,8 @@ function App({
   const [teacherAttendance, setTeacherAttendance, replaceTeacherAttendance] = useSyncedSchoolSection("teacherAttendance", schoolState.teacherAttendance);
   const [teacherGroups, setTeacherGroups, replaceTeacherGroups] = useSyncedSchoolSection("teacherGroups", schoolState.teacherGroups);
   const [teachers, setTeachers, replaceTeachers] = useSyncedSchoolSection("teachers", schoolState.teachers);
+  const [rangeData, setRangeData] = useState<{ attendance: AttendanceRecord[]; visitors: Visitor[]; teacherAttendance: TeacherAttendance[]; truncated: boolean } | null>(null);
+  const [rangeError, setRangeError] = useState("");
   const directorName = schoolState.directorName;
   const teacherIds = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -296,6 +302,25 @@ function App({
     replaceTeacherGroups(nextState.teacherGroups);
     replaceTeachers(nextState.teachers);
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
+
+  const loadRange = useCallback(async (range: DateRange) => {
+    setRangeError("");
+    const result = await loadRangeDataAction(range);
+    if (!result.ok) {
+      setRangeError(result.error);
+      setRangeData(null);
+      return;
+    }
+    setRangeData(result.data);
+  }, []);
+
+  useEffect(() => {
+    if (session?.role !== "Directivo") {
+      setRangeData(null);
+      return;
+    }
+    void loadRange(initialDateRange);
+  }, [initialDateRange, loadRange, session?.role]);
 
   const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
     try {
@@ -422,12 +447,16 @@ function App({
         <section className="content">
           {view === "inicio" && <Dashboard userName={session.name} role={session.role} records={records} students={students} visitors={visitors} assignedGroups={teacherGroups[session.name] || []} onNavigate={navigate} />}
           {view === "visitantes" && session.role !== "Docente" && (
-            <VisitorRegistry
-              visitors={visitors}
-              setVisitors={setVisitors}
-              readOnly={session.role === "Directivo"}
-              canDelete={session.role === "Directivo"}
-            />
+            <>
+              {session.role === "Directivo" && <DateRangeFilter initial={initialDateRange} />}
+              {rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
+              <VisitorRegistry
+                visitors={session.role === "Directivo" && rangeData ? rangeData.visitors : visitors}
+                setVisitors={setVisitors}
+                readOnly={session.role === "Directivo"}
+                canDelete={session.role === "Directivo"}
+              />
+            </>
           )}
           {view === "lista" && session.role === "Docente" && (
             <RollCall
@@ -442,13 +471,17 @@ function App({
             />
           )}
           {view === "listas-oficiales" && session.role === "Directivo" && (
-            <OfficialListsArchive
-              officialLists={officialLists}
-              groups={groups.map((group) => group.name)}
-              canCorrect={session.role === "Directivo"}
-              replaceOfficialLists={replaceOfficialLists}
-              directorName={directorName}
-            />
+            <>
+              <DateRangeFilter initial={initialDateRange} />
+              <OfficialListsArchive
+                officialLists={officialLists}
+                groups={groups.map((group) => group.name)}
+                canCorrect={session.role === "Directivo"}
+                replaceOfficialLists={replaceOfficialLists}
+                directorName={directorName}
+                dateRange={initialDateRange}
+              />
+            </>
           )}
           {view === "alumnos" && session.role === "Docente" && (
             <StudentManagement
@@ -468,7 +501,14 @@ function App({
             />
           )}
           {view === "docentes" && session.role === "Directivo" && (
-            <TeacherAttendanceOverview attendance={teacherAttendance} teachers={teachers} />
+            <>
+              <DateRangeFilter initial={initialDateRange} />
+              {rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
+              <TeacherAttendanceOverview
+                attendance={session.role === "Directivo" && rangeData ? rangeData.teacherAttendance : teacherAttendance}
+                teachers={teachers}
+              />
+            </>
           )}
           {view === "grupos" && session.role === "Directivo" && (
             <TeacherGroupManagement
@@ -523,7 +563,20 @@ function App({
               onRefresh={refreshSchoolState}
             />
           )}
-          {view === "reportes" && session.role !== "Vigilante de Acceso" && <Reports records={records} students={students} groups={groups.map((group) => group.name)} assignments={teacherGroups} allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined} initialTemplates={initialTemplates} />}
+          {view === "reportes" && session.role !== "Vigilante de Acceso" && (
+            <>
+              {session.role === "Directivo" && <DateRangeFilter initial={initialDateRange} />}
+              {session.role === "Directivo" && rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
+              <Reports
+                records={session.role === "Directivo" && rangeData ? rangeData.attendance : records}
+                students={students}
+                groups={groups.map((group) => group.name)}
+                assignments={teacherGroups}
+                allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined}
+                initialTemplates={initialTemplates}
+              />
+            </>
+          )}
         </section>
       </main>
     </div>
@@ -2308,17 +2361,22 @@ function OfficialListsArchive({
   canCorrect,
   replaceOfficialLists,
   directorName,
+  dateRange,
 }: {
   officialLists: OfficialAttendanceList[];
   groups: string[];
   canCorrect: boolean;
   replaceOfficialLists: (lists: OfficialAttendanceList[]) => void;
   directorName: string;
+  dateRange?: DateRange;
 }) {
   const router = useRouter();
-  const availableGroups = [...new Set([...groups, ...officialLists.map((list) => list.group)])].sort();
+  const filteredLists = dateRange
+    ? officialLists.filter((list) => list.officialDates.some((date) => date >= dateRange.desde && date <= dateRange.hasta))
+    : officialLists;
+  const availableGroups = [...new Set([...groups, ...filteredLists.map((list) => list.group)])].sort();
   const [group, setGroup] = useState(availableGroups[0] || "");
-  const groupLists = officialLists
+  const groupLists = filteredLists
     .filter((list) => list.group === group)
     .slice()
     .sort((a, b) => b.month.localeCompare(a.month));

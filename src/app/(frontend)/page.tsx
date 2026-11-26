@@ -5,9 +5,23 @@ import SchoolApp, { type ReportTemplate } from "./SchoolApp"
 import { appAuth, listUsersForDirectivo, toAppUserSummary } from "@/lib/app-auth"
 import { loadSchoolStateAction } from "./school-data-actions"
 import type { SchoolStateData } from "@/lib/school-data-types"
+import { getDefaultDateRange, validateDateRange, type DateRange } from "./DateRangeFilter"
 
-export default async function HomePage() {
+type HomePageProps = {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}
+
+const readDateRange = (params: { [key: string]: string | string[] | undefined }): DateRange => {
+  const rawDesde = typeof params.desde === "string" ? params.desde : ""
+  const rawHasta = typeof params.hasta === "string" ? params.hasta : ""
+  if (validateDateRange(rawDesde, rawHasta)) return { desde: rawDesde, hasta: rawHasta }
+  return getDefaultDateRange()
+}
+
+export default async function HomePage({ searchParams }: HomePageProps) {
   await connection()
+  const resolvedSearchParams = await searchParams
+  const initialDateRange = readDateRange(resolvedSearchParams)
   const payload = await getPayload({ config })
   const currentUser = await appAuth.currentUser()
   const users = currentUser ? await listUsersForDirectivo(currentUser) : []
@@ -40,6 +54,7 @@ export default async function HomePage() {
       initialSchoolState={schoolState}
       initialTemplates={templates}
       initialUsers={users}
+      initialDateRange={initialDateRange}
     />
   )
 }

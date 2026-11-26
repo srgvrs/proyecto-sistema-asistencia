@@ -15,7 +15,7 @@ import type {
   TeacherProfile,
   Visitor,
 } from "@/lib/school-data-types"
-import { DEFAULT_DIRECTOR_NAME } from "@/lib/school-data-types"
+import { DEFAULT_DIRECTOR_NAME, todayISO as todayISOFromLib } from "@/lib/school-data-types"
 
 const isString = (value: unknown): value is string => typeof value === "string"
 
@@ -126,6 +126,12 @@ const isISODateTime = (value: unknown): value is string => {
 const toISODate = (value: string | null | undefined): string => {
   if (!value) return ""
   return value.slice(0, 10)
+}
+
+const localDayRangeToUTC = (desde: string, hasta: string): { start: string; end: string } => {
+  const start = new Date(`${desde}T00:00:00`);
+  const end = new Date(`${hasta}T23:59:59.999`);
+  return { start: start.toISOString(), end: end.toISOString() };
 }
 
 const toHHMM = (value: string | null | undefined): string => {
@@ -998,6 +1004,109 @@ export async function officializeAttendanceAction(
       JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
     )
     return { ok: false, error: "No fue posible oficializar la lista. Intenta nuevamente." }
+  }
+}
+
+type RangeDataInput = { desde: string; hasta: string }
+
+type RangeDataResult = {
+  attendance: AttendanceRecord[]
+  visitors: Visitor[]
+  teacherAttendance: TeacherAttendance[]
+  truncated: boolean
+}
+
+const RANGE_PAGE_SIZE = 500
+const RANGE_MAX_PAGES = 20
+
+const fetchAllPages = async <T>(
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  args: Parameters<typeof payload.find>[0],
+  user: ActionUser,
+): Promise<{ docs: T[]; truncated: boolean }> => {
+  const docs: T[] = []
+  let page = 1
+  while (page <= RANGE_MAX_PAGES) {
+    const result = await payload.find({
+      ...args,
+      page,
+      limit: RANGE_PAGE_SIZE,
+      overrideAccess: false,
+      user,
+    })
+    docs.push(...(result.docs as T[]))
+    if (!result.hasNextPage) return { docs, truncated: false }
+    page += 1
+  }
+  return { docs, truncated: true }
+}
+
+export async function loadRangeDataAction(
+  input: RangeDataInput,
+): Promise<{ ok: true; data: RangeDataResult } | { ok: false; error: string }> {
+  const user = await appAuth.currentUser()
+  if (!user || user.role !== "Directivo") {
+    return { ok: false, error: "Solo un directivo puede consultar rangos de fechas." }
+  }
+  if (!isISODate(input?.desde) || !isISODate(input?.hasta) || input.desde > input.hasta) {
+    return { ok: false, error: "El rango de fechas no es válido." }
+  }
+  try {
+    const payload = await getPayload({ config })
+    const dayRange = localDayRangeToUTC(input.desde, input.hasta)
+    const attendanceWhere = {
+      and: [
+        { date: { greater_than_equal: `${input.desde}T00:00:00.000Z` } },
+        { date: { less_than_equal: `${input.hasta}T00:00:00.000Z` } },
+      ],
+    }
+    const timeWhere = {
+      and: [
+        { entryTime: { greater_than_equal: dayRange.start } },
+        { entryTime: { less_than_equal: dayRange.end } },
+      ],
+    }
+    const [attendance, visitors, teacherAttendance] = await Promise.all([
+      fetchAllPages<AttendanceDoc>(payload, {
+        collection: "attendance",
+        where: attendanceWhere,
+        sort: "-date",
+        depth: 0,
+      }, user),
+      fetchAllPages<VisitorDoc>(payload, {
+        collection: "visitors",
+        where: timeWhere,
+        sort: "-entryTime",
+        depth: 0,
+      }, user),
+      fetchAllPages<TeacherAttendanceDoc>(payload, {
+        collection: "teacher-attendance",
+        where: timeWhere,
+        sort: "-date",
+        depth: 0,
+      }, user),
+    ])
+    return {
+      ok: true,
+      data: {
+        attendance: attendance.docs.map(mapAttendanceDoc),
+        visitors: visitors.docs.map(mapVisitorDoc),
+        teacherAttendance: teacherAttendance.docs.map((doc) => ({
+          id: String(doc.id),
+          teacher: getRelationName(doc.teacher),
+          date: toISODate(doc.date),
+          entryTime: toHHMM(doc.entryTime),
+          exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
+        })),
+        truncated: attendance.truncated || visitors.truncated || teacherAttendance.truncated,
+      },
+    }
+  } catch (error: any) {
+    console.error(
+      "LOAD RANGE DATA ERROR",
+      JSON.stringify(error?.data?.errors ?? error?.message ?? error, null, 2),
+    )
+    return { ok: false, error: "No fue posible cargar los datos del rango seleccionado." }
   }
 }
 
