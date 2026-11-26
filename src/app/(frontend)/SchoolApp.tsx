@@ -1546,7 +1546,11 @@ function UserManagement({
     if (!resetUser) return;
     setResetPending(true);
     setResetNotice(null);
-    const result = await resetUserPasswordAction({ userId: resetUser.id, password: newPassword });
+    const result = await resetUserPasswordAction({
+      userId: resetUser.id,
+      newPassword,
+      confirmPassword,
+    });
     setResetPending(false);
     if (!result.ok) {
       setResetNotice({ type: "error", text: result.error });
@@ -1560,6 +1564,14 @@ function UserManagement({
   const submitPasswordReset = (event: React.FormEvent) => {
     event.preventDefault();
     if (!resetUser) return;
+    if (resetUser.role === "Directivo") {
+      setResetNotice({ type: "error", text: "No puedes restablecer la contraseña de otro Directivo." });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setResetNotice({ type: "error", text: "La contraseña debe tener al menos 8 caracteres." });
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setResetNotice({ type: "error", text: "Las contraseñas no coinciden." });
       return;
@@ -1606,7 +1618,9 @@ function UserManagement({
               <div className="user-access-row" key={user.id}>
                 <div><span className="avatar">{user.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><span><strong>{user.name}</strong><small>@{user.username}</small></span></div>
                 <span className={`role-badge role-${user.role.toLowerCase().replaceAll(" ", "-")}`}>{user.role}</span>
-                <button className="reset-password-button" type="button" onClick={() => selectPasswordReset(user)}><Icon name="lock" size={15} /> Restablecer</button>
+                {user.role === "Directivo"
+                  ? <span className="security-note"><Icon name="lock" size={15} /> No disponible</span>
+                  : <button className="reset-password-button" type="button" onClick={() => selectPasswordReset(user)}><Icon name="lock" size={15} /> Restablecer contraseña</button>}
               </div>
             ))}
           </div>

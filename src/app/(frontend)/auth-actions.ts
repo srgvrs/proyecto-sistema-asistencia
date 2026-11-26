@@ -71,27 +71,60 @@ export async function createUserAction(input: {
 
 export async function resetUserPasswordAction(input: {
   userId: string
-  password: string
+  newPassword: string
+  confirmPassword: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const currentUser = await appAuth.currentUser()
   if (!currentUser || currentUser.role !== "Directivo") {
     return { ok: false, error: "No tienes permiso para restablecer contraseñas." }
   }
-  if (!input.userId || input.password.length < 8) {
+  if (
+    !input ||
+    typeof input.userId !== "string" ||
+    typeof input.newPassword !== "string" ||
+    typeof input.confirmPassword !== "string"
+  ) {
+    return { ok: false, error: "Los datos del restablecimiento no son válidos." }
+  }
+  const numericId = Number(input.userId)
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return { ok: false, error: "Identificador inválido." }
+  }
+  if (input.newPassword.length < 8) {
     return { ok: false, error: "La nueva contraseña debe tener al menos 8 caracteres." }
+  }
+  if (input.newPassword !== input.confirmPassword) {
+    return { ok: false, error: "Las contraseñas no coinciden." }
   }
 
   try {
     const payload = await getPayload({ config })
+    const target = await payload.findByID({
+      collection: "users",
+      id: numericId,
+      depth: 0,
+      overrideAccess: false,
+      user: currentUser,
+    })
+    if (!target) {
+      return { ok: false, error: "El usuario no existe." }
+    }
+    if (target.role === "Directivo") {
+      return { ok: false, error: "No puedes restablecer la contraseña de otro Directivo." }
+    }
     await payload.update({
       collection: "users",
-      id: Number(input.userId),
-      data: { password: input.password, sessions: [] },
+      id: numericId,
+      data: { password: input.newPassword, sessions: [] },
       overrideAccess: false,
       user: currentUser,
     })
     return { ok: true }
-  } catch {
+  } catch (error) {
+    console.error(
+      "RESET USER PASSWORD ERROR",
+      error instanceof Error ? error.message : String(error),
+    )
     return { ok: false, error: "No fue posible restablecer la contraseña." }
   }
 }
