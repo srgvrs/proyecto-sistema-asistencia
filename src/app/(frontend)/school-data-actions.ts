@@ -16,7 +16,7 @@ import type {
   Visitor,
 } from "@/lib/school-data-types"
 import { DEFAULT_DIRECTOR_NAME, todayISO } from "@/lib/school-data-types"
-import { toSchoolDayKey } from "@/lib/date-range"
+import { toMexicoDayKey, toSchoolDayKey } from "@/lib/date-range"
 
 const isString = (value: unknown): value is string => typeof value === "string"
 
@@ -442,7 +442,7 @@ const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
     : "Pendiente",
   authorizedByName: (doc.authorizedByName ?? "").trim(),
   authorizedAt: doc.authorizedAt ? toHHMM(doc.authorizedAt) : null,
-  date: toSchoolDayKey(doc.entryTime),
+  date: toMexicoDayKey(doc.entryTime),
   entryTime: toHHMM(doc.entryTime),
   exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
 })
@@ -1414,7 +1414,7 @@ export async function loadSchoolStateAction(): Promise<
 
     const teacherAttendance: TeacherAttendance[] = (teacherAttendanceResult.docs as TeacherAttendanceDoc[]).map((doc) => {
       const teacherId = getRelationId(doc.teacher)
-      const teacherDoc = teacherDocs.find((item) => String(item.id) === teacherId)
+      const teacherDoc = teacherDocs.find((item) => Number(item.id) === Number(teacherId))
       return {
         id: String(doc.id),
         teacher: teacherDoc?.name || getRelationName(doc.teacher),

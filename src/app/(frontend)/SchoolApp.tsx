@@ -37,7 +37,7 @@ import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateDat
 import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
 import { DateRangeFilter, GroupModeControl } from "./DateRangeFilter";
-import { formatSchoolDay, groupByPeriod, toSchoolDayKey, type DateRange, type GroupMode } from "@/lib/date-range";
+import { formatMexicoDateTime, formatSchoolDay, groupByPeriod, toMexicoDayKey, toSchoolDayKey, type DateRange, type GroupMode } from "@/lib/date-range";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
 
@@ -103,6 +103,7 @@ const getSchoolStateWithDefaults = (state?: Partial<SchoolStateData> | null): Sc
   directorName: state?.directorName?.trim() || DEFAULT_DIRECTOR_NAME,
 });
 const formatDate = (date: string) => formatSchoolDay(toSchoolDayKey(date));
+const formatDateTime = (value: string | null | undefined) => formatMexicoDateTime(value);
 
 const getCycleLabel = (date: string): string => {
   const [yearText, monthText] = date.split("-");
@@ -794,10 +795,10 @@ function Metric({ label, value, tone, detail, icon }: { label: string; value: nu
 
 function VisitorDashboard({ userName, visitors, onNavigate }: { userName: string; visitors: Visitor[]; onNavigate: (view: View) => void }) {
   const today = todayISO();
-  const todayVisitors = visitors.filter((visitor) => toSchoolDayKey(visitor.date) === today);
+  const todayVisitors = visitors.filter((visitor) => toMexicoDayKey(visitor.date) === today);
   const active = visitors.filter((visitor) => !visitor.exitTime).length;
   const completedToday = todayVisitors.filter((visitor) => visitor.exitTime).length;
-  const recent = visitors.slice().sort((a, b) => `${toSchoolDayKey(b.date)}${b.entryTime}`.localeCompare(`${toSchoolDayKey(a.date)}${a.entryTime}`)).slice(0, 6);
+  const recent = visitors.slice().sort((a, b) => `${toMexicoDayKey(b.date)}${b.entryTime}`.localeCompare(`${toMexicoDayKey(a.date)}${a.entryTime}`)).slice(0, 6);
 
   return (
     <>
@@ -1258,7 +1259,7 @@ function VisitorRegistry({
                 {group.items.map((visitor) => <div className="visitor-row" key={visitor.id}>
                   <div><span className="avatar">{visitor.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><span><strong>{visitor.name}</strong><small>{visitor.identification} · {visitor.reason}</small></span></div>
                   <span>{visitor.host}</span>
-                  <span><strong>{visitor.entryTime}</strong><small>{formatDate(visitor.date)}</small></span>
+                  <span><strong>{visitor.entryTime}</strong><small>{formatDateTime(visitor.date)}</small></span>
                   <span>{visitor.exitTime ? <span className="exit-time">{visitor.exitTime}</span> : readOnly ? <span className="inside-status">En plantel</span> : <button className="exit-button" onClick={() => registerExit(visitor)} disabled={isPending}>Registrar salida</button>}</span>
                   <span className={`presence-badge ${visitor.authorizationStatus === "Autorizada" ? "completed" : ""}`}>{visitor.authorizationStatus}</span>
                   {visitor.authorizedByName && <small>Autorizó: {visitor.authorizedByName}</small>}

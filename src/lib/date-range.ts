@@ -41,7 +41,7 @@ export const getDefaultDateRange = (): DateRange => {
 
 const MEXICO_TZ = "America/Mexico_City"
 
-const DAY_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}T00:00:00(?:\.000)?Z$/
+const DAY_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}(?:T00:00:00(?:\.000)?Z)?$/
 
 const capitalize = (value: string): string =>
   value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value
@@ -91,6 +91,14 @@ export const toSchoolDayKey = (value: string | null | undefined): string => {
   return dayKeyFormatter.format(date)
 }
 
+/** Formats a stored timestamp as a Mexico City day key (YYYY-MM-DD). */
+export const toMexicoDayKey = (value: string | null | undefined): string => {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.valueOf())) return ""
+  return dayKeyFormatter.format(date)
+}
+
 const toMonthKey = (value: string): string => {
   const dayKey = toSchoolDayKey(value)
   if (dayKey) return dayKey.slice(0, 7)
@@ -124,7 +132,7 @@ export const formatSchoolDay = (dayKey: string): string => labelForDay(dayKey)
 
 /** Formats a stored timestamp as a Mexico City day label. */
 export const formatSchoolDateTime = (value: string | null | undefined): string =>
-  labelForDay(toSchoolDayKey(value))
+  labelForDay(toMexicoDayKey(value))
 
 export const groupByPeriod = <T>(
   items: readonly T[],
