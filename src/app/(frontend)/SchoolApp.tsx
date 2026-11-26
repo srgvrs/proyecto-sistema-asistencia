@@ -37,7 +37,7 @@ import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateDat
 import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
 import { DateRangeFilter, GroupModeControl } from "./DateRangeFilter";
-import { formatMexicoDateTime, formatSchoolDay, groupByPeriod, toMexicoDayKey, toSchoolDayKey, type DateRange, type GroupMode } from "@/lib/date-range";
+import { formatSchoolDateTime, formatSchoolDay, groupByPeriod, toMexicoDayKey, toSchoolDayKey, type DateRange, type GroupMode } from "@/lib/date-range";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
 
@@ -103,7 +103,7 @@ const getSchoolStateWithDefaults = (state?: Partial<SchoolStateData> | null): Sc
   directorName: state?.directorName?.trim() || DEFAULT_DIRECTOR_NAME,
 });
 const formatDate = (date: string) => formatSchoolDay(toSchoolDayKey(date));
-const formatDateTime = (value: string | null | undefined) => formatMexicoDateTime(value);
+const formatDateTime = (value: string | null | undefined) => formatSchoolDateTime(value);
 
 const getCycleLabel = (date: string): string => {
   const [yearText, monthText] = date.split("-");
