@@ -2592,6 +2592,7 @@ function RollCall({
     ? officialLists.find((list) => list.group === group && list.month === date.slice(0, 7))
     : undefined;
   const isOfficial = Boolean(officialList?.officialDates.includes(date));
+  const isOfficialToday = isOfficial && date === todayISO();
   const statusFor = (student: Student): Status => draft[student.id]
     || records.find((record) => record.studentId === student.id && record.date === date && record.source === "Pase de lista")?.status
     || records.find((record) => record.studentId === student.id && record.date === date && record.source === "Acceso")?.status
@@ -2644,7 +2645,12 @@ function RollCall({
         replaceRecords(result.attendanceRecords);
         replaceOfficialLists(result.officialAttendanceLists);
         setDraft({});
-        setNotice("Pase de lista oficializado y agregado al formato mensual. Ya no se permiten modificaciones.");
+        setNotice(
+          result.warning
+            ? `Pase de lista oficializado. ${result.warning}`
+            : "Pase de lista oficializado y agregado al formato mensual. Ya no se permiten modificaciones.",
+        );
+        router.refresh();
       });
     });
   };
@@ -2669,22 +2675,28 @@ function RollCall({
           <div className={`official-state ${isOfficial ? "closed" : ""}`}><Icon name={isOfficial ? "lock" : "clock"} /><span><small>ESTADO</small><strong>{isOfficial ? "Oficializado" : "Borrador editable"}</strong></span></div>
         </div>
         {notice && <div className="inline-notice"><Icon name={isOfficial ? "lock" : "check"} /> {notice}</div>}
-        <div className="bulk-actions"><span><strong>{groupStudents.length}</strong> alumnos · <strong>{absences}</strong> faltas</span><button disabled={isOfficial} onClick={() => setDraft(Object.fromEntries(groupStudents.map((s) => [s.id, "Presente"])))}>Marcar todos presentes</button><button disabled={isOfficial} onClick={() => setDraft(Object.fromEntries(groupStudents.map((s) => [s.id, "Falta"])))}>Marcar todos con falta</button></div>
-        <div className="attendance-table">
-          <div className="attendance-head"><span>N.º · Alumno</span><span>Estado de asistencia</span></div>
-          {groupStudents.map((student) => <div className="attendance-row" key={student.id}>
-            <div><span className="list-number-chip">{student.listNumber}</span><span className="avatar">{student.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
-            <div className="status-toggle">
-              {(["Presente", "Retardo", "Falta"] as Status[]).map((status) => <button key={status} disabled={isOfficial} className={statusFor(student) === status ? `selected ${status.toLowerCase()}` : ""} onClick={() => setStatus(student.id, status)}>{status}</button>)}
+        {isOfficialToday ? (
+          <div className="inline-notice"><Icon name="lock" /> Lista oficializada. Podrás consultarla mañana.</div>
+        ) : (
+          <>
+            <div className="bulk-actions"><span><strong>{groupStudents.length}</strong> alumnos · <strong>{absences}</strong> faltas</span><button disabled={isOfficial} onClick={() => setDraft(Object.fromEntries(groupStudents.map((s) => [s.id, "Presente"])))}>Marcar todos presentes</button><button disabled={isOfficial} onClick={() => setDraft(Object.fromEntries(groupStudents.map((s) => [s.id, "Falta"])))}>Marcar todos con falta</button></div>
+            <div className="attendance-table">
+              <div className="attendance-head"><span>N.º · Alumno</span><span>Estado de asistencia</span></div>
+              {groupStudents.map((student) => <div className="attendance-row" key={student.id}>
+                <div><span className="list-number-chip">{student.listNumber}</span><span className="avatar">{student.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}</span><strong>{student.name}</strong></div>
+                <div className="status-toggle">
+                  {(["Presente", "Retardo", "Falta"] as Status[]).map((status) => <button key={status} disabled={isOfficial} className={statusFor(student) === status ? `selected ${status.toLowerCase()}` : ""} onClick={() => setStatus(student.id, status)}>{status}</button>)}
+                </div>
+              </div>)}
             </div>
-          </div>)}
-        </div>
-        <div className="roll-footer">
-          <p><Icon name="alert" size={18} /> Al oficializar, el pase de lista se cerrará definitivamente.</p>
-          <div>{!isOfficial && <button className="secondary-button" disabled={isPending} onClick={saveDraft}>{isPending ? "Guardando…" : "Guardar borrador"}</button>}<button className="primary-button" disabled={isOfficial || isPending || !groupStudents.length} onClick={officialize}><Icon name="lock" size={17} /> {isPending ? "Procesando…" : "Oficializar lista"}</button></div>
-        </div>
+            <div className="roll-footer">
+              <p><Icon name="alert" size={18} /> Al oficializar, el pase de lista se cerrará definitivamente.</p>
+              <div>{!isOfficial && <button className="secondary-button" disabled={isPending} onClick={saveDraft}>{isPending ? "Guardando…" : "Guardar borrador"}</button>}<button className="primary-button" disabled={isOfficial || isPending || !groupStudents.length} onClick={officialize}><Icon name="lock" size={17} /> {isPending ? "Procesando…" : "Oficializar lista"}</button></div>
+            </div>
+          </>
+        )}
       </section>
-      {officialList && (
+      {officialList && !isOfficialToday && (
         <section className="official-list-preview">
           <div className="official-list-preview-head"><div><p className="eyebrow">FORMATO INSTITUCIONAL</p><h2>Lista oficial del mes</h2></div><OfficialListDownloadButton list={officialList} directorName={directorName} className="secondary-button" /></div>
           <OfficialAttendanceSheet list={officialList} directorName={directorName} />

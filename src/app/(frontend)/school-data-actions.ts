@@ -15,23 +15,9 @@ import type {
   TeacherProfile,
   Visitor,
 } from "@/lib/school-data-types"
-import { DEFAULT_DIRECTOR_NAME, todayISO as todayISOFromLib } from "@/lib/school-data-types"
+import { DEFAULT_DIRECTOR_NAME, todayISO } from "@/lib/school-data-types"
 
 const isString = (value: unknown): value is string => typeof value === "string"
-
-const todayISO = (): string => {
-  const now = new Date()
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Mexico_City",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now)
-  const year = parts.find((part) => part.type === "year")?.value ?? ""
-  const month = parts.find((part) => part.type === "month")?.value ?? ""
-  const day = parts.find((part) => part.type === "day")?.value ?? ""
-  return `${year}-${month}-${day}`
-}
 
 const getCycleLabel = (date: string): string => {
   const [yearText, monthText] = date.split("-")
@@ -187,6 +173,29 @@ const isStudentInOfficialMarks = async (
     if (String(studentId) in marks) return true
   }
   return false
+}
+
+const getOfficializedDatesForGroup = async (
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  groupId: number,
+): Promise<Set<string>> => {
+  const result = await payload.find({
+    collection: "official-lists",
+    where: { group: { equals: groupId } },
+    limit: 200,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const dates = new Set<string>()
+  for (const doc of result.docs as OfficialListDoc[]) {
+    const marks = doc.marks
+    if (!marks || typeof marks !== "object" || Array.isArray(marks)) continue
+    for (const studentMarks of Object.values(marks as Record<string, Record<string, "." | "X">>)) {
+      if (!studentMarks || typeof studentMarks !== "object") continue
+      for (const date of Object.keys(studentMarks)) dates.add(date)
+    }
+  }
+  return dates
 }
 
 const isStudentDateOfficialized = async (
@@ -815,7 +824,7 @@ type OfficializeAttendanceInput = {
 export async function officializeAttendanceAction(
   input: OfficializeAttendanceInput,
 ): Promise<
-  | { ok: true; attendanceRecords: AttendanceRecord[]; officialAttendanceLists: OfficialAttendanceList[] }
+  | { ok: true; attendanceRecords: AttendanceRecord[]; officialAttendanceLists: OfficialAttendanceList[]; warning?: string }
   | { ok: false; error: string }
 > {
   const user = await appAuth.currentUser()
@@ -997,7 +1006,91 @@ export async function officializeAttendanceAction(
       },
     ]
 
-    return { ok: true, attendanceRecords, officialAttendanceLists }
+    let warning: string | undefined
+    const today = todayISO()
+    if (input.date === today) {
+      try {
+        const teacherGroupsResult = await payload.find({
+          collection: "groups",
+          where: { teacher: { equals: user.id } },
+          limit: 200,
+          depth: 0,
+          overrideAccess: false,
+          user,
+        })
+        const teacherGroupDocs = teacherGroupsResult.docs as GroupDoc[]
+        const groupsWithStudents: GroupDoc[] = []
+        for (const group of teacherGroupDocs) {
+          const studentsInGroup = await payload.find({
+            collection: "students",
+            where: {
+              and: [
+                { group: { equals: group.id } },
+                { status: { not_equals: "Egresado" } },
+              ],
+            },
+            limit: 1,
+            depth: 0,
+            overrideAccess: false,
+            user,
+          })
+          if ((studentsInGroup.totalDocs ?? studentsInGroup.docs.length) > 0) {
+            groupsWithStudents.push(group)
+          }
+        }
+        let allOfficializedToday = groupsWithStudents.length > 0
+        for (const group of groupsWithStudents) {
+          const dates = await getOfficializedDatesForGroup(payload, Number(group.id))
+          if (!dates.has(today)) {
+            allOfficializedToday = false
+            break
+          }
+        }
+        if (allOfficializedToday) {
+          const todayAttendance = await payload.find({
+            collection: "teacher-attendance",
+            where: {
+              and: [
+                { teacher: { equals: user.id } },
+                { date: { equals: `${today}T00:00:00.000Z` } },
+              ],
+            },
+            limit: 1,
+            depth: 0,
+            overrideAccess: false,
+            user,
+          })
+          const todayRecord = todayAttendance.docs[0] as TeacherAttendanceDoc | undefined
+          if (!todayRecord) {
+            warning = "No hay registro de entrada hoy; no se registró salida automática."
+          } else if (!todayRecord.exitTime) {
+            try {
+              await payload.update({
+                collection: "teacher-attendance",
+                id: todayRecord.id,
+                data: { exitTime: new Date().toISOString() },
+                overrideAccess: false,
+                user,
+              })
+            } catch (exitError: any) {
+              console.error(
+                "OFFICIALIZE AUTO EXIT ERROR",
+                JSON.stringify(exitError?.data?.errors ?? exitError?.message ?? exitError, null, 2),
+              )
+              warning = "No fue posible registrar la salida automática del docente."
+            }
+          }
+        }
+      } catch (autoExitError: any) {
+        console.error(
+          "OFFICIALIZE AUTO EXIT CHECK ERROR",
+          JSON.stringify(autoExitError?.data?.errors ?? autoExitError?.message ?? autoExitError, null, 2),
+        )
+        warning = "No fue posible verificar la salida automática del docente."
+      }
+    }
+
+    return { ok: true, attendanceRecords, officialAttendanceLists, warning }
   } catch (error: any) {
     console.error(
       "OFFICIALIZE ERROR",
