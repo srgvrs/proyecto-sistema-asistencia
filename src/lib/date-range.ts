@@ -78,7 +78,13 @@ const yearKeyFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: MEXICO_TZ,
 })
 
-const toDayKey = (value: string): string => {
+/**
+ * Single source of truth for turning a stored value into a school day key.
+ * - Day-only values (`YYYY-MM-DDT00:00:00.000Z`) are sliced, no timezone shift.
+ * - Real timestamps (entryTime, exitTime, etc.) are formatted in America/Mexico_City.
+ */
+export const toSchoolDayKey = (value: string | null | undefined): string => {
+  if (!value) return ""
   if (DAY_ONLY_PATTERN.test(value)) return value.slice(0, 10)
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return ""
@@ -86,7 +92,7 @@ const toDayKey = (value: string): string => {
 }
 
 const toMonthKey = (value: string): string => {
-  const dayKey = toDayKey(value)
+  const dayKey = toSchoolDayKey(value)
   if (dayKey) return dayKey.slice(0, 7)
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return ""
@@ -94,7 +100,7 @@ const toMonthKey = (value: string): string => {
 }
 
 const toYearKey = (value: string): string => {
-  const dayKey = toDayKey(value)
+  const dayKey = toSchoolDayKey(value)
   if (dayKey) return dayKey.slice(0, 4)
   const date = new Date(value)
   if (Number.isNaN(date.valueOf())) return ""
@@ -113,6 +119,13 @@ const labelForMonth = (monthKey: string): string => {
 
 const labelForYear = (yearKey: string): string => yearKey
 
+/** Formats a day key (YYYY-MM-DD) as "Miércoles, 25 de noviembre de 2026". */
+export const formatSchoolDay = (dayKey: string): string => labelForDay(dayKey)
+
+/** Formats a stored timestamp as a Mexico City day label. */
+export const formatSchoolDateTime = (value: string | null | undefined): string =>
+  labelForDay(toSchoolDayKey(value))
+
 export const groupByPeriod = <T>(
   items: readonly T[],
   getDate: (item: T) => string,
@@ -122,7 +135,7 @@ export const groupByPeriod = <T>(
   for (const item of items) {
     const raw = getDate(item)
     if (!raw) continue
-    const key = mode === "dia" ? toDayKey(raw) : mode === "mes" ? toMonthKey(raw) : toYearKey(raw)
+    const key = mode === "dia" ? toSchoolDayKey(raw) : mode === "mes" ? toMonthKey(raw) : toYearKey(raw)
     if (!key) continue
     const bucket = buckets.get(key)
     if (bucket) bucket.push(item)

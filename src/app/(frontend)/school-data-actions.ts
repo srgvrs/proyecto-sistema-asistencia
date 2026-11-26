@@ -16,6 +16,7 @@ import type {
   Visitor,
 } from "@/lib/school-data-types"
 import { DEFAULT_DIRECTOR_NAME, todayISO } from "@/lib/school-data-types"
+import { toSchoolDayKey } from "@/lib/date-range"
 
 const isString = (value: unknown): value is string => typeof value === "string"
 
@@ -109,10 +110,7 @@ const isISODateTime = (value: unknown): value is string => {
   return !Number.isNaN(date.valueOf())
 }
 
-const toISODate = (value: string | null | undefined): string => {
-  if (!value) return ""
-  return value.slice(0, 10)
-}
+const toISODate = (value: string | null | undefined): string => toSchoolDayKey(value)
 
 const localDayRangeToUTC = (desde: string, hasta: string): { start: string; end: string } => {
   const start = new Date(`${desde}T00:00:00`);
@@ -444,7 +442,7 @@ const mapVisitorDoc = (doc: VisitorDoc): Visitor => ({
     : "Pendiente",
   authorizedByName: (doc.authorizedByName ?? "").trim(),
   authorizedAt: doc.authorizedAt ? toHHMM(doc.authorizedAt) : null,
-  date: toISODate(doc.entryTime),
+  date: toSchoolDayKey(doc.entryTime),
   entryTime: toHHMM(doc.entryTime),
   exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
 })
@@ -1236,7 +1234,7 @@ export async function loadRangeDataAction(
         collection: "teacher-attendance",
         where: timeWhere,
         sort: "-date",
-        depth: 0,
+        depth: 1,
       }),
     ])
 
@@ -1248,7 +1246,7 @@ export async function loadRangeDataAction(
         teacherAttendance: teacherAttendance.docs.map((doc) => ({
           id: String(doc.id),
           teacher: getRelationName(doc.teacher),
-          date: toISODate(doc.date),
+          date: toSchoolDayKey(doc.date),
           entryTime: toHHMM(doc.entryTime),
           exitTime: doc.exitTime ? toHHMM(doc.exitTime) : null,
         })),

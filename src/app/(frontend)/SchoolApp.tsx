@@ -37,7 +37,7 @@ import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateDat
 import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
 import { DateRangeFilter, GroupModeControl } from "./DateRangeFilter";
-import { groupByPeriod, type DateRange, type GroupMode } from "@/lib/date-range";
+import { formatSchoolDay, groupByPeriod, toSchoolDayKey, type DateRange, type GroupMode } from "@/lib/date-range";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
 
@@ -102,10 +102,7 @@ const getSchoolStateWithDefaults = (state?: Partial<SchoolStateData> | null): Sc
   teachers: state?.teachers ?? [],
   directorName: state?.directorName?.trim() || DEFAULT_DIRECTOR_NAME,
 });
-const formatDate = (date: string) =>
-  new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(
-    new Date(`${date}T12:00:00Z`),
-  );
+const formatDate = (date: string) => formatSchoolDay(toSchoolDayKey(date));
 
 const getCycleLabel = (date: string): string => {
   const [yearText, monthText] = date.split("-");
@@ -741,11 +738,11 @@ function Dashboard({ userName, role, records, students, visitors, assignedGroups
   const visibleStudentIds = new Set(visibleStudents.map((student) => student.id));
   const visibleRecords = records.filter((record) => visibleStudentIds.has(record.studentId));
   const currentDate = todayISO();
-  const today = visibleRecords.filter((r) => r.date === currentDate);
+  const today = visibleRecords.filter((r) => toSchoolDayKey(r.date) === currentDate);
   const present = today.filter((r) => r.status === "Presente").length;
   const late = today.filter((r) => r.status === "Retardo").length;
   const absent = today.filter((r) => r.status === "Falta").length;
-  const recent = visibleRecords.slice().sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)).slice(0, 5);
+  const recent = visibleRecords.slice().sort((a, b) => `${toSchoolDayKey(b.date)}${b.time}`.localeCompare(`${toSchoolDayKey(a.date)}${a.time}`)).slice(0, 5);
   return (
     <>
       <div className="page-intro">
@@ -797,10 +794,10 @@ function Metric({ label, value, tone, detail, icon }: { label: string; value: nu
 
 function VisitorDashboard({ userName, visitors, onNavigate }: { userName: string; visitors: Visitor[]; onNavigate: (view: View) => void }) {
   const today = todayISO();
-  const todayVisitors = visitors.filter((visitor) => visitor.date === today);
+  const todayVisitors = visitors.filter((visitor) => toSchoolDayKey(visitor.date) === today);
   const active = visitors.filter((visitor) => !visitor.exitTime).length;
   const completedToday = todayVisitors.filter((visitor) => visitor.exitTime).length;
-  const recent = visitors.slice().sort((a, b) => `${b.date}${b.entryTime}`.localeCompare(`${a.date}${a.entryTime}`)).slice(0, 6);
+  const recent = visitors.slice().sort((a, b) => `${toSchoolDayKey(b.date)}${b.entryTime}`.localeCompare(`${toSchoolDayKey(a.date)}${a.entryTime}`)).slice(0, 6);
 
   return (
     <>
@@ -852,9 +849,9 @@ function TeacherCheckIn({
   const [isPending, startTransition] = useTransition();
   const { requestConfirmation, confirmationDialog } = useConfirmation();
   const today = todayISO();
-  const todayRecord = attendance.find((record) => record.teacher === teacher && record.date === today);
+  const todayRecord = attendance.find((record) => record.teacher === teacher && toSchoolDayKey(record.date) === today);
   const isInside = Boolean(todayRecord && !todayRecord.exitTime);
-  const teacherHistory = attendance.filter((record) => record.teacher === teacher).sort((a, b) => b.date.localeCompare(a.date));
+  const teacherHistory = attendance.filter((record) => record.teacher === teacher).sort((a, b) => toSchoolDayKey(b.date).localeCompare(toSchoolDayKey(a.date)));
 
   const registerEntry = () => {
     if (todayRecord || isPending) return;
@@ -946,7 +943,7 @@ function TeacherCheckIn({
           <div className="panel-head"><div><p className="eyebrow">HISTORIAL PERSONAL</p><h2>Últimos registros</h2></div><Icon name="calendar" /></div>
           {teacherHistory.length > 0 ? <div className="teacher-history-list">
             {teacherHistory.slice(0, 7).map((record) => <div className="teacher-history-row" key={record.id}>
-              <div><strong>{formatDate(record.date)}</strong><small>{record.date === today ? "Hoy" : "Registro diario"}</small></div>
+              <div><strong>{formatDate(record.date)}</strong><small>{toSchoolDayKey(record.date) === today ? "Hoy" : "Registro diario"}</small></div>
               <span><small>ENTRADA</small><strong>{record.entryTime} h</strong></span>
               <span><small>SALIDA</small><strong>{record.exitTime ? `${record.exitTime} h` : "Pendiente"}</strong></span>
               <span className={`presence-badge ${record.exitTime ? "completed" : ""}`}>{record.exitTime ? "Completado" : "En plantel"}</span>
@@ -962,7 +959,7 @@ function TeacherAttendanceOverview({ attendance, teachers, groupMode }: { attend
   const [filter, setFilter] = useState<"Todos" | "En plantel" | "Fuera">("Todos");
   const today = todayISO();
   const rows = teachers.map((teacher) => {
-    const record = attendance.find((item) => item.teacher === teacher.name && item.date === today);
+    const record = attendance.find((item) => item.teacher === teacher.name && toSchoolDayKey(item.date) === today);
     const status = teacher.status === "Baja temporal" ? "Baja temporal" : teacher.justifiedDates.includes(today) ? "Justificado" : record ? record.exitTime ? "Salida registrada" : "En plantel" : "Sin registro";
     return { teacher: teacher.name, record, status };
   }).filter((row) =>
@@ -971,10 +968,10 @@ function TeacherAttendanceOverview({ attendance, teachers, groupMode }: { attend
     (filter === "Fuera" && row.status !== "En plantel"),
   );
   const present = teachers.filter((teacher) =>
-    attendance.some((record) => record.teacher === teacher.name && record.date === today && !record.exitTime),
+    attendance.some((record) => record.teacher === teacher.name && toSchoolDayKey(record.date) === today && !record.exitTime),
   ).length;
   const registered = teachers.filter((teacher) =>
-    attendance.some((record) => record.teacher === teacher.name && record.date === today),
+    attendance.some((record) => record.teacher === teacher.name && toSchoolDayKey(record.date) === today),
   ).length;
 
   const groupedAttendance = useMemo(
@@ -1183,7 +1180,7 @@ function VisitorRegistry({
     `${visitor.name} ${visitor.identification} ${visitor.host}`.toLowerCase().includes(search.toLowerCase()),
   );
   const groupedVisitors = useMemo(
-    () => groupByPeriod(filteredVisitors, (visitor) => `${visitor.date}T${visitor.entryTime || "00:00"}:00`, groupMode),
+    () => groupByPeriod(filteredVisitors, (visitor) => visitor.date, groupMode),
     [filteredVisitors, groupMode],
   );
   const exportVisitorsCSV = () => {
@@ -2654,7 +2651,7 @@ function OfficialListsArchive({
 }) {
   const router = useRouter();
   const filteredLists = dateRange
-    ? officialLists.filter((list) => list.officialDates.some((date) => date >= dateRange.desde && date <= dateRange.hasta))
+    ? officialLists.filter((list) => list.officialDates.some((date) => toSchoolDayKey(date) >= dateRange.desde && toSchoolDayKey(date) <= dateRange.hasta))
     : officialLists;
   const availableGroups = [...new Set([...groups, ...filteredLists.map((list) => list.group)])].sort();
   const [group, setGroup] = useState(availableGroups[0] || "");
@@ -2940,8 +2937,8 @@ function RollCall({
   const isOfficial = Boolean(officialList?.officialDates.includes(date));
   const isOfficialToday = isOfficial && date === todayISO();
   const statusFor = (student: Student): Status => draft[student.id]
-    || records.find((record) => record.studentId === student.id && record.date === date && record.source === "Pase de lista")?.status
-    || records.find((record) => record.studentId === student.id && record.date === date && record.source === "Acceso")?.status
+    || records.find((record) => record.studentId === student.id && toSchoolDayKey(record.date) === date && record.source === "Pase de lista")?.status
+    || records.find((record) => record.studentId === student.id && toSchoolDayKey(record.date) === date && record.source === "Acceso")?.status
     || "Presente";
   const setStatus = (id: string, status: Status) => !isOfficial && setDraft((old) => ({ ...old, [id]: status }));
   const saveDraft = () => {
@@ -2963,7 +2960,7 @@ function RollCall({
         .map((result) => result.record);
       setRecords((old) => {
         const ids = new Set(groupStudents.map((s) => s.id));
-        const rest = old.filter((record) => !(ids.has(record.studentId) && record.date === date && record.source === "Pase de lista"));
+        const rest = old.filter((record) => !(ids.has(record.studentId) && toSchoolDayKey(record.date) === date && record.source === "Pase de lista"));
         return [...savedRecords, ...rest];
       });
       setDraft({});
@@ -3129,7 +3126,7 @@ async function generateFlatAttendancePdf(source: ArrayBuffer, rows: ReportRow[],
     outputDocument.addPage(page);
     const studentIds = new Set(groupPage.rows.map((row) => row.id));
     const groupRecords = records.filter((record) => studentIds.has(record.studentId));
-    const latestDate = groupRecords.map((record) => record.date).sort().at(-1) || todayISO();
+    const latestDate = groupRecords.map((record) => toSchoolDayKey(record.date)).sort().at(-1) || todayISO();
     const [year, month] = latestDate.split("-").map(Number);
     const schoolDays: string[] = [];
     const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -3169,7 +3166,7 @@ async function generateFlatAttendancePdf(source: ArrayBuffer, rows: ReportRow[],
       page.drawText(row.name, { x: 64, y: rowY, size: fontSize, font: regularFont });
 
       schoolDays.forEach((date, dayIndex) => {
-        const dayRecords = groupRecords.filter((record) => record.studentId === row.id && record.date === date);
+        const dayRecords = groupRecords.filter((record) => record.studentId === row.id && toSchoolDayKey(record.date) === date);
         const status = dayRecords.some((record) => record.status === "Falta")
           ? "F"
           : dayRecords.some((record) => record.status === "Retardo")
@@ -3521,7 +3518,7 @@ function Reports({
   const rows = useMemo(() => groupStudents.map((student) => {
     const statusByDate = new Map<string, Status>();
     records
-      .filter((record) => record.studentId === student.id && record.date >= periodRange.startDate && record.date <= periodRange.endDate)
+      .filter((record) => record.studentId === student.id && toSchoolDayKey(record.date) >= periodRange.startDate && toSchoolDayKey(record.date) <= periodRange.endDate)
       .slice()
       .sort((a, b) => Number(a.source === "Pase de lista") - Number(b.source === "Pase de lista"))
       .forEach((record) => statusByDate.set(record.date, record.status));
@@ -3592,7 +3589,7 @@ function Reports({
     if (groupMode === "dia") return null;
     const entries = displayedRows.flatMap((row) =>
       records
-        .filter((record) => record.studentId === row.id && record.date >= periodRange.startDate && record.date <= periodRange.endDate)
+        .filter((record) => record.studentId === row.id && toSchoolDayKey(record.date) >= periodRange.startDate && toSchoolDayKey(record.date) <= periodRange.endDate)
         .map((record) => ({ record, row })),
     );
     return groupByPeriod(entries, (entry) => entry.record.date, groupMode);
