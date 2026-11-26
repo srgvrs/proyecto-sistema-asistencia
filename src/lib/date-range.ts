@@ -91,13 +91,11 @@ export const toSchoolDayKey = (value: string | null | undefined): string => {
   return dayKeyFormatter.format(date)
 }
 
-/** Formats a stored timestamp as a Mexico City day key (YYYY-MM-DD). */
-export const toMexicoDayKey = (value: string | null | undefined): string => {
-  if (!value) return ""
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return ""
-  return dayKeyFormatter.format(date)
-}
+/**
+ * Formats a stored timestamp as a Mexico City day key (YYYY-MM-DD).
+ * Day-only values are returned as-is so they are never shifted twice.
+ */
+export const toMexicoDayKey = (value: string | null | undefined): string => toSchoolDayKey(value)
 
 const toMonthKey = (value: string): string => {
   const dayKey = toSchoolDayKey(value)
@@ -130,7 +128,7 @@ const labelForYear = (yearKey: string): string => yearKey
 /** Formats a day key (YYYY-MM-DD) as "Miércoles, 25 de noviembre de 2026". */
 export const formatSchoolDay = (dayKey: string): string => labelForDay(dayKey)
 
-/** Formats a stored timestamp as a Mexico City day label. */
+/** Formats a stored timestamp as a Mexico City day label ("jueves, 26 de noviembre de 2026"). */
 export const formatSchoolDateTime = (value: string | null | undefined): string =>
   labelForDay(toMexicoDayKey(value))
 
