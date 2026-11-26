@@ -2038,6 +2038,10 @@ const formatOfficialMonth = (month: string) =>
     .toUpperCase();
 
 const OFFICIAL_SHEET_MIN_ROWS = 30;
+const renderAttendanceMark = (mark: string | undefined): string => {
+  if (!mark) return "";
+  return mark === "." ? "✓" : mark;
+};
 const getOfficialSheetRows = (list: OfficialAttendanceList) =>
   Array.from(
     { length: Math.max(OFFICIAL_SHEET_MIN_ROWS, list.students.length) },
@@ -2081,6 +2085,22 @@ async function generateOfficialAttendancePdf(list: OfficialAttendanceList) {
     let size = initialSize;
     while (size > 4.2 && regularFont.widthOfTextAtSize(text, size) > width) size -= 0.2;
     return size;
+  };
+  const drawCheckMark = (centerX: number, baselineY: number, size: number) => {
+    const color = rgb(0.05, 0.05, 0.05);
+    const thickness = Math.max(0.6, size * 0.14);
+    page.drawLine({
+      start: { x: centerX - size * 0.32, y: baselineY + size * 0.42 },
+      end: { x: centerX - size * 0.08, y: baselineY + size * 0.12 },
+      thickness,
+      color,
+    });
+    page.drawLine({
+      start: { x: centerX - size * 0.08, y: baselineY + size * 0.12 },
+      end: { x: centerX + size * 0.36, y: baselineY + size * 0.78 },
+      thickness,
+      color,
+    });
   };
 
   page.drawImage(institutionLogo, { x: 37, y: 708, width: 110, height: 45 });
@@ -2151,6 +2171,10 @@ async function generateOfficialAttendancePdf(list: OfficialAttendanceList) {
       const mark = list.marks[student.studentId]?.[day.date];
       if (!mark) return;
       const cellX = dayStartX + (dayIndex * dayWidth);
+      if (mark === ".") {
+        drawCheckMark(cellX + dayWidth / 2, rowBottom + 2.8, 7);
+        return;
+      }
       page.drawText(mark, {
         x: cellX + ((dayWidth - boldFont.widthOfTextAtSize(mark, 7)) / 2),
         y: rowBottom + 2.8,
@@ -2243,7 +2267,7 @@ function OfficialAttendanceSheet({ list }: { list: OfficialAttendanceList }) {
               <tr key={student?.studentId || `empty-${rowIndex}`}>
                 <td>{student?.listNumber ?? rowIndex + 1}</td>
                 <td>{student?.name || ""}</td>
-                {schoolDays.map((day) => <td className={day.weekEnd ? "week-end" : ""} key={day.date}>{student ? list.marks[student.studentId]?.[day.date] || "" : ""}</td>)}
+                {schoolDays.map((day) => <td className={day.weekEnd ? "week-end" : ""} key={day.date}>{student ? renderAttendanceMark(list.marks[student.studentId]?.[day.date]) : ""}</td>)}
               </tr>
             ))}
           </tbody>
@@ -2698,14 +2722,33 @@ async function generateFlatAttendancePdf(source: ArrayBuffer, rows: ReportRow[],
             : dayRecords.some((record) => record.status === "Presente")
               ? "P"
               : "";
-        if (status) {
-          page.drawText(status, {
-            x: firstDayX + (dayIndex * dayStep) + 4.8,
-            y: rowY,
-            size: 5.5,
-            font: boldFont,
+        if (!status) return;
+        const cellX = firstDayX + (dayIndex * dayStep);
+        if (status === "P") {
+          const color = rgb(0.05, 0.05, 0.05);
+          const size = 5.5;
+          const centerX = cellX + 4.8 + size * 0.3;
+          const baselineY = rowY;
+          page.drawLine({
+            start: { x: centerX - size * 0.32, y: baselineY + size * 0.42 },
+            end: { x: centerX - size * 0.08, y: baselineY + size * 0.12 },
+            thickness: Math.max(0.5, size * 0.14),
+            color,
           });
+          page.drawLine({
+            start: { x: centerX - size * 0.08, y: baselineY + size * 0.12 },
+            end: { x: centerX + size * 0.36, y: baselineY + size * 0.78 },
+            thickness: Math.max(0.5, size * 0.14),
+            color,
+          });
+          return;
         }
+        page.drawText(status, {
+          x: cellX + 4.8,
+          y: rowY,
+          size: 5.5,
+          font: boldFont,
+        });
       });
     });
   }
