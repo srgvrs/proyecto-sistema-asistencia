@@ -259,44 +259,47 @@ h1, h2, h3, .brand strong { font-family: ui-sans-serif, system-ui, -apple-system
 .cutoff span small, .cutoff span strong { display: block; }
 .cutoff span small { font-size: 9px; color: #7a8f87; }
 .cutoff span strong { font-size: 12px; }
-.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-.metric { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 11px; padding: 20px; display: flex; justify-content: space-between; min-height: 130px; box-shadow: 0 2px 10px rgba(15,59,45,.025); }
-.metric p { color: var(--color-text-muted); font-size: 11px; }
-.metric strong { display: block; color: var(--color-heading); font-family: inherit; font-size: 31px; margin: 8px 0 3px; }
-.metric small { color: var(--color-text-muted); font-size: 10px; }
-.metric > span { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; }
-.metric-green > span { background: #e1f1e9; color: #197050; }
-.metric-amber > span { background: #fff2d9; color: #a46a05; }
-.metric-red > span { background: #f9e4e0; color: #a74736; }
-.metric-neutral > span { background: #e6eeeb; color: #46645a; }
-.dashboard-grid { display: grid; grid-template-columns: 1.45fr .85fr; gap: 20px; }
-.panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 3px 14px rgba(15,59,45,.035); }
-.panel-head { display: flex; justify-content: space-between; align-items: center; padding: 21px 23px 17px; border-bottom: 1px solid var(--color-divider); }
-.panel h2 { font-size: 16px; color: var(--color-heading); }
-.text-button { border: 0; background: none; color: var(--color-link); font-size: 11px; font-weight: 600; display: flex; align-items: center; }
-.recent-item { display: grid; grid-template-columns: 36px minmax(130px, 1fr) auto 42px; align-items: center; gap: 10px; padding: 13px 23px; border-bottom: 1px solid var(--color-divider); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.metric { min-width: 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 11px; padding: 20px; display: flex; justify-content: space-between; gap: 12px; min-height: 130px; box-shadow: 0 2px 10px rgba(15,59,45,.025); }
+.metric > div { min-width: 0; }
+.metric p { color: var(--color-text-muted); font-size: 11px; overflow-wrap: anywhere; }
+.metric strong { display: block; color: var(--color-heading); font-family: inherit; font-size: 31px; line-height: 1.05; margin: 8px 0 3px; }
+.metric small { color: var(--color-text-muted); font-size: 10px; overflow-wrap: anywhere; }
+.metric > span { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 9px; display: grid; place-items: center; }
+.metric-green > span { background: var(--color-status-presente-bg); color: var(--color-status-presente-text); }
+.metric-amber > span { background: var(--color-status-retardo-bg); color: var(--color-status-retardo-text); }
+.metric-red > span { background: var(--color-status-falta-bg); color: var(--color-status-falta-text); }
+.metric-neutral > span { background: var(--color-chip-bg); color: var(--color-text-secondary); }
+.dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+.panel { min-width: 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 3px 14px rgba(15,59,45,.035); }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 21px 23px 17px; border-bottom: 1px solid var(--color-divider); }
+.panel-head > div { min-width: 0; }
+.panel h2 { font-size: 16px; color: var(--color-heading); overflow-wrap: anywhere; }
+.text-button { min-height: 40px; border: 0; background: none; color: var(--color-link); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; padding: 8px 4px; }
+.recent-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 13px 23px; border-bottom: 1px solid var(--color-divider); }
 .recent-item:last-child { border: 0; }
 .avatar { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--color-avatar-bg); color: var(--color-avatar-text); font-size: 9px; font-weight: 700; flex: 0 0 auto; }
-.recent-name strong, .recent-name small { display: block; }
+.recent-name { min-width: 0; }
+.recent-name strong, .recent-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-name strong { color: var(--color-heading); font-size: 11px; }
 .recent-name small { color: var(--color-text-muted); font-size: 9px; margin-top: 3px; }
 .recent-item time { font-size: 11px; color: var(--color-text-muted); text-align: right; }
-.status-badge { font-size: 9px; font-weight: 700; border-radius: 99px; padding: 5px 8px; }
+.status-badge { flex: 0 0 auto; font-size: 9px; font-weight: 700; border-radius: 99px; padding: 5px 8px; white-space: nowrap; }
 .status-presente { color: var(--color-status-presente-text); background: var(--color-status-presente-bg); }
 .status-retardo { color: var(--color-status-retardo-text); background: var(--color-status-retardo-bg); }
 .status-falta { color: var(--color-status-falta-text); background: var(--color-status-falta-bg); }
 .quick-panel { padding-bottom: 12px; }
 .quick-panel .panel-head { border: 0; }
-.quick-panel > button { width: calc(100% - 30px); margin: 0 15px 8px; padding: 12px; background: var(--color-chip-bg); border: 1px solid var(--color-chip-border); border-radius: 9px; display: flex; gap: 11px; align-items: center; color: var(--color-text-secondary); text-align: left; }
+.quick-panel > button { width: calc(100% - 30px); min-height: 48px; margin: 0 15px 8px; padding: 12px; background: var(--color-chip-bg); border: 1px solid var(--color-chip-border); border-radius: 9px; display: flex; gap: 11px; align-items: center; color: var(--color-text-secondary); text-align: left; }
 .quick-panel > button:hover { border-color: #91b5a8; background: var(--color-primary-soft); }
-.quick-panel button > div { flex: 1; }
-.quick-panel button strong, .quick-panel button small { display: block; }
+.quick-panel button > div { flex: 1; min-width: 0; }
+.quick-panel button strong, .quick-panel button small { display: block; overflow-wrap: anywhere; }
 .quick-panel button strong { color: var(--color-heading); font-size: 11px; }
-.quick-panel button small { color: var(--color-text-muted); font-size: 9px; margin-top: 3px; }
-.quick-icon { width: 34px; height: 34px; display: grid; place-items: center; color: var(--color-link); background: var(--color-surface); border-radius: 8px; }
-.visitor-metrics { grid-template-columns: repeat(3, 1fr); }
-.visitor-dashboard-grid { grid-template-columns: 1.55fr .65fr; }
-.visitor-recent-item { grid-template-columns: 36px minmax(150px, 1fr) auto 42px; }
+.quick-panel button small { color: var(--color-text-muted); font-size: 10px; margin-top: 3px; }
+.quick-icon { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; color: var(--color-link); background: var(--color-surface); border-radius: 8px; }
+.visitor-metrics { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.visitor-dashboard-grid { grid-template-columns: 1fr; }
+.visitor-recent-item { grid-template-columns: 36px minmax(0, 1fr) auto; }
 
 .login-page { min-height: 100vh; display: grid; grid-template-columns: 43% 57%; background: #f7f9f7; }
 .login-brand { background: #0a3b2d; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 50px; position: relative; overflow: hidden; }
@@ -842,8 +845,13 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
   .attendance-report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+@media (min-width: 768px) {
+  .dashboard-grid { grid-template-columns: 1.45fr .85fr; }
+  .visitor-dashboard-grid { grid-template-columns: 1.55fr .65fr; }
+}
+
 @media (max-width: 980px) {
-  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid { grid-template-columns: 1fr; }
   .visitor-dashboard-grid { grid-template-columns: 1fr; }
   .access-layout { grid-template-columns: 1fr; }
@@ -880,17 +888,19 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
   .navigation-results { top: 45px; }
   .a11y-popover { right: 0; }
   .page-intro { align-items: flex-start; flex-direction: column; }
-  .metrics { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .page-intro .date-pill { width: 100%; justify-content: center; white-space: normal; }
+  .metrics { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
   .visitor-metrics { grid-template-columns: 1fr; }
   .metric { min-height: 115px; padding: 15px; }
   .metric > span { display: none; }
+  .recent-item { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 12px 15px; }
+  .recent-item time { display: none; }
+  .quick-panel > button { width: calc(100% - 24px); margin: 0 12px 8px; }
   .login-page { grid-template-columns: 1fr; }
   .login-brand { min-height: 250px; padding: 35px 20px; }
   .school-seal { width: 112px; height: 132px; margin-bottom: 14px; }
   .login-brand h1 { font-size: 28px; }
   .login-panel { padding: 35px 22px; }
-  .recent-item { grid-template-columns: 34px minmax(100px, 1fr) auto; padding: 12px 15px; }
-  .recent-item time { display: none; }
   .register-card { padding: 20px 16px; }
   .selected-student .verified { display: none; }
   .teacher-presence { width: 100%; }
@@ -973,6 +983,8 @@ input:focus, select:focus { border-color: #3b8069 !important; box-shadow: 0 0 0 
   .confirmation-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .metrics { grid-template-columns: 1fr; }
   .attendance-report-metrics { grid-template-columns: 1fr; }
+  .recent-item { grid-template-columns: 32px minmax(0, 1fr); row-gap: 6px; }
+  .recent-item .status-badge { grid-column: 2; justify-self: start; }
   .report-date-filters { grid-template-columns: 1fr; }
   .report-date-filters.period-filters { grid-template-columns: 1fr; }
   .report-date-filters label:nth-child(3) { grid-column: auto; }
