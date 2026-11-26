@@ -273,6 +273,9 @@ function App({
   const [teachers, setTeachers, replaceTeachers] = useSyncedSchoolSection("teachers", schoolState.teachers);
   const [rangeData, setRangeData] = useState<{ attendance: AttendanceRecord[]; visitors: Visitor[]; teacherAttendance: TeacherAttendance[]; truncated: boolean } | null>(null);
   const [rangeError, setRangeError] = useState("");
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number>(() => Date.now());
+  const [refreshPending, setRefreshPending] = useState(false);
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
   const directorName = schoolState.directorName;
   const teacherIds = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -292,18 +295,36 @@ function App({
   }, [groups, teacherGroups]);
 
   const refreshSchoolState = useCallback(async () => {
-    const result = await loadSchoolStateAction();
-    if (!result.ok) return;
-    const nextState = getSchoolStateWithDefaults(result.data);
-    replaceRecords(nextState.attendanceRecords);
-    replaceOfficialLists(nextState.officialAttendanceLists);
-    replaceStudents(nextState.students);
-    replaceGroups(nextState.groups);
-    replaceVisitors(nextState.visitors);
-    replaceTeacherAttendance(nextState.teacherAttendance);
-    replaceTeacherGroups(nextState.teacherGroups);
-    replaceTeachers(nextState.teachers);
+    try {
+      const result = await loadSchoolStateAction();
+      if (!result.ok) {
+        console.error("REFRESH SCHOOL STATE ERROR", result.error);
+        return;
+      }
+      const nextState = getSchoolStateWithDefaults(result.data);
+      replaceRecords(nextState.attendanceRecords);
+      replaceOfficialLists(nextState.officialAttendanceLists);
+      replaceStudents(nextState.students);
+      replaceGroups(nextState.groups);
+      replaceVisitors(nextState.visitors);
+      replaceTeacherAttendance(nextState.teacherAttendance);
+      replaceTeacherGroups(nextState.teacherGroups);
+      replaceTeachers(nextState.teachers);
+      setLastRefreshedAt(Date.now());
+    } catch (error) {
+      console.error("REFRESH SCHOOL STATE ERROR", error);
+    }
   }, [replaceGroups, replaceOfficialLists, replaceRecords, replaceStudents, replaceTeacherAttendance, replaceTeacherGroups, replaceTeachers, replaceVisitors]);
+
+  const manualRefresh = useCallback(async () => {
+    if (refreshPending) return;
+    setRefreshPending(true);
+    try {
+      await refreshSchoolState();
+    } finally {
+      setRefreshPending(false);
+    }
+  }, [refreshPending, refreshSchoolState]);
 
   const loadRange = useCallback(async (range: DateRange) => {
     setRangeError("");
@@ -323,6 +344,29 @@ function App({
     }
     void loadRange(initialDateRange);
   }, [initialDateRange, loadRange, session?.role]);
+
+  const isReadOnlyView = view === "inicio" || view === "visitantes" || view === "listas-oficiales" || view === "docentes";
+
+  useEffect(() => {
+    if (!session || !isReadOnlyView) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      void refreshSchoolState();
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [isReadOnlyView, refreshSchoolState, session]);
+
+  useEffect(() => {
+    if (!isReadOnlyView) return;
+    const tick = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(tick);
+  }, [isReadOnlyView]);
+
+  const minutesSinceRefresh = Math.max(0, Math.floor((nowTick - lastRefreshedAt) / 60_000));
+  const refreshedLabel = minutesSinceRefresh === 0
+    ? "Actualizado hace menos de 1 min"
+    : `Actualizado hace ${minutesSinceRefresh} min`;
 
   const handleAssignTeacher = useCallback(async (groupId: string, teacherId: string | null) => {
     try {
@@ -439,6 +483,14 @@ function App({
               </div>
             )}
           </div>
+          {isReadOnlyView && (
+            <div className="refresh-controls">
+              <small aria-live="polite">{refreshedLabel}</small>
+              <button type="button" className="secondary-button" onClick={manualRefresh} disabled={refreshPending} aria-busy={refreshPending}>
+                <Icon name="clock" size={16} /> {refreshPending ? "Actualizando…" : "Actualizar"}
+              </button>
+            </div>
+          )}
           <AccessibilityControls variant="topbar" />
           <div className="user-chip">
             <span>{session.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
