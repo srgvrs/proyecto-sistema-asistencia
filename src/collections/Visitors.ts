@@ -74,6 +74,20 @@ export const Visitors: CollectionConfig = {
       },
     },
     {
+      name: "host",
+      label: "Docente o persona visitada",
+      type: "relationship",
+      relationTo: "users",
+      required: false,
+      hasMany: false,
+      filterOptions: {
+        role: { equals: "Docente" },
+      },
+      admin: {
+        description: "Docente que recibe la visita. Permite al docente consultar solo sus propias visitas.",
+      },
+    },
+    {
       name: "registeredBy",
       label: "Registrado por",
       type: "relationship",
