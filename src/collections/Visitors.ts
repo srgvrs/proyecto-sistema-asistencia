@@ -4,16 +4,19 @@ import { isDirectivo, isVigilante } from "../access"
 const readVisitors: Access = ({ req }) => {
   if (req.user?.collection === "admins") return true
   if (req.user?.collection !== "users") return false
+  if (req.user.active === false) return false
   return req.user.role === "Directivo" || req.user.role === "Vigilante de Acceso"
 }
 
 const createVisitors: Access = ({ req }) => {
   if (req.user?.collection !== "users") return false
+  if (req.user.active === false) return false
   return req.user.role === "Directivo" || req.user.role === "Vigilante de Acceso"
 }
 
 const updateVisitors: Access = ({ req }) => {
   if (req.user?.collection !== "users") return false
+  if (req.user.active === false) return false
   if (req.user.role === "Directivo") return true
   if (req.user.role === "Vigilante de Acceso") {
     return { registeredBy: { equals: req.user.id } }

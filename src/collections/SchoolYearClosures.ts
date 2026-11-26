@@ -1,6 +1,9 @@
 import type { CollectionConfig } from 'payload'
 
-type AppUser = { role?: string | null }
+type AppUser = { role?: string | null; active?: boolean | null }
+
+const isActiveDirectivo = (user: AppUser | null | undefined) =>
+  user?.role === 'Directivo' && user.active !== false
 
 export const SchoolYearClosures: CollectionConfig = {
   slug: 'school-year-closures',
@@ -9,8 +12,8 @@ export const SchoolYearClosures: CollectionConfig = {
     defaultColumns: ['cycleLabel', 'closedAt', 'closedBy', 'promoted', 'graduated'],
   },
   access: {
-    create: ({ req: { user } }) => (user as AppUser | null)?.role === 'Directivo',
-    read: ({ req: { user } }) => (user as AppUser | null)?.role === 'Directivo',
+    create: ({ req: { user } }) => isActiveDirectivo(user as AppUser | null),
+    read: ({ req: { user } }) => isActiveDirectivo(user as AppUser | null),
     update: () => false,
     delete: () => false,
   },
