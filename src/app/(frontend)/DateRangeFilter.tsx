@@ -4,14 +4,14 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   getMonthRange,
+  MAX_RANGE_DAYS,
   validateDateRange,
   type DateRange,
+  type GroupMode,
 } from "@/lib/date-range";
 import { todayISO } from "@/lib/school-data-types";
 
-export type { DateRange };
-
-const MAX_RANGE_DAYS = 366;
+export type { DateRange, GroupMode };
 
 const isValidISODate = (value: string): boolean => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -82,6 +82,41 @@ const ChevronIcon = () => (
     <path d="m6 9 6 6 6-6" />
   </svg>
 );
+
+const GROUP_MODE_OPTIONS: { value: GroupMode; label: string }[] = [
+  { value: "dia", label: "Día" },
+  { value: "mes", label: "Mes" },
+  { value: "ano", label: "Año" },
+];
+
+export function GroupModeControl({
+  value,
+  onChange,
+  label = "Agrupar por",
+}: {
+  value: GroupMode;
+  onChange: (next: GroupMode) => void;
+  label?: string;
+}) {
+  return (
+    <div className="group-mode-control" role="group" aria-label={label}>
+      <span className="group-mode-label">{label}:</span>
+      <div className="group-mode-segmented">
+        {GROUP_MODE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={value === option.value ? "active" : ""}
+            aria-pressed={value === option.value}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function DateRangeFilter({ initial }: { initial: DateRange }) {
   const router = useRouter();

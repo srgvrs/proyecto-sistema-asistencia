@@ -36,8 +36,8 @@ import { DEFAULT_DIRECTOR_NAME, todayISO } from "@/lib/school-data-types";
 import type { AttendanceRecord, GroupRef, OfficialAttendanceList, SchoolStateData, SchoolStateSection, Status, Student, TeacherAttendance, TeacherProfile, Visitor } from "@/lib/school-data-types";
 import { compareStudentsByName, sortAndNumberGroupStudents, sortAndNumberStudents } from "@/lib/student-ordering";
 import { AccessibilityControls } from "./AccessibilityControls";
-import { DateRangeFilter } from "./DateRangeFilter";
-import type { DateRange } from "@/lib/date-range";
+import { DateRangeFilter, GroupModeControl } from "./DateRangeFilter";
+import { groupByPeriod, type DateRange, type GroupMode } from "@/lib/date-range";
 
 type View = "inicio" | "visitantes" | "lista" | "listas-oficiales" | "alumnos" | "docentes" | "grupos" | "catalogo" | "personal" | "usuarios" | "reportes" | "cierre-ciclo";
 
@@ -283,6 +283,7 @@ function App({
   const [teachers, setTeachers, replaceTeachers] = useSyncedSchoolSection("teachers", schoolState.teachers);
   const [rangeData, setRangeData] = useState<{ attendance: AttendanceRecord[]; visitors: Visitor[]; teacherAttendance: TeacherAttendance[]; truncated: boolean } | null>(null);
   const [rangeError, setRangeError] = useState("");
+  const [groupMode, setGroupMode] = useState<GroupMode>("dia");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number>(() => Date.now());
   const [refreshPending, setRefreshPending] = useState(false);
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
@@ -522,6 +523,7 @@ function App({
             <>
               {session.role === "Directivo" && (
                 <div className="view-header-row">
+                  <GroupModeControl value={groupMode} onChange={setGroupMode} />
                   <DateRangeFilter initial={initialDateRange} />
                 </div>
               )}
@@ -535,6 +537,7 @@ function App({
                 currentUserId={session.id}
                 currentUserName={session.name}
                 currentUserRole={session.role}
+                groupMode={groupMode}
               />
             </>
           )}
@@ -553,6 +556,7 @@ function App({
           {view === "listas-oficiales" && session.role === "Directivo" && (
             <>
               <div className="view-header-row">
+                <GroupModeControl value={groupMode} onChange={setGroupMode} />
                 <DateRangeFilter initial={initialDateRange} />
               </div>
               <OfficialListsArchive
@@ -562,6 +566,7 @@ function App({
                 replaceOfficialLists={replaceOfficialLists}
                 directorName={directorName}
                 dateRange={initialDateRange}
+                groupMode={groupMode}
               />
             </>
           )}
@@ -585,12 +590,14 @@ function App({
           {view === "docentes" && session.role === "Directivo" && (
             <>
               <div className="view-header-row">
+                <GroupModeControl value={groupMode} onChange={setGroupMode} />
                 <DateRangeFilter initial={initialDateRange} />
               </div>
               {rangeError && <div className="notice notice-error"><Icon name="alert" /><div><strong>No se pudo cargar el rango</strong><p>{rangeError}</p></div></div>}
               <TeacherAttendanceOverview
                 attendance={session.role === "Directivo" && rangeData ? rangeData.teacherAttendance : teacherAttendance}
                 teachers={teachers}
+                groupMode={groupMode}
               />
             </>
           )}
@@ -651,6 +658,7 @@ function App({
             <>
               {session.role === "Directivo" && (
                 <div className="view-header-row">
+                  <GroupModeControl value={groupMode} onChange={setGroupMode} />
                   <DateRangeFilter initial={initialDateRange} />
                 </div>
               )}
@@ -662,6 +670,7 @@ function App({
                 assignments={teacherGroups}
                 allowedGroups={session.role === "Docente" ? teacherGroups[session.name] || [] : undefined}
                 initialTemplates={initialTemplates}
+                groupMode={groupMode}
               />
             </>
           )}
@@ -949,7 +958,7 @@ function TeacherCheckIn({
   );
 }
 
-function TeacherAttendanceOverview({ attendance, teachers }: { attendance: TeacherAttendance[]; teachers: TeacherProfile[] }) {
+function TeacherAttendanceOverview({ attendance, teachers, groupMode }: { attendance: TeacherAttendance[]; teachers: TeacherProfile[]; groupMode: GroupMode }) {
   const [filter, setFilter] = useState<"Todos" | "En plantel" | "Fuera">("Todos");
   const today = todayISO();
   const rows = teachers.map((teacher) => {
@@ -967,6 +976,11 @@ function TeacherAttendanceOverview({ attendance, teachers }: { attendance: Teach
   const registered = teachers.filter((teacher) =>
     attendance.some((record) => record.teacher === teacher.name && record.date === today),
   ).length;
+
+  const groupedAttendance = useMemo(
+    () => groupByPeriod(attendance, (record) => record.date, groupMode),
+    [attendance, groupMode],
+  );
 
   return (
     <>
@@ -994,6 +1008,46 @@ function TeacherAttendanceOverview({ attendance, teachers }: { attendance: Teach
           </div>)}
         </div>
       </section>
+      <section className="panel teacher-overview">
+        <div className="panel-head teacher-overview-head">
+          <div><p className="eyebrow">HISTORIAL AGRUPADO</p><h2>Registros por {groupMode === "dia" ? "día" : groupMode === "mes" ? "mes" : "año"}</h2></div>
+        </div>
+        {groupedAttendance.length === 0 ? (
+          <div className="empty-state"><Icon name="clock" /><strong>Sin registros</strong><p>No hay asistencias docentes en el rango seleccionado.</p></div>
+        ) : (
+          <div className="grouped-list">
+            {groupedAttendance.map((group) => {
+              const withExit = group.items.filter((item) => item.exitTime).length;
+              return (
+                <div className="grouped-block" key={group.key}>
+                  <div className="grouped-header">
+                    <strong>{group.label}</strong>
+                    <span className="grouped-count">{group.count} {group.count === 1 ? "registro" : "registros"}</span>
+                    {groupMode !== "dia" && (
+                      <span className="grouped-summary">
+                        {group.count} entradas · {withExit} salidas · {group.count - withExit} en plantel
+                      </span>
+                    )}
+                  </div>
+                  <div className="teacher-overview-table">
+                    {group.items.map((record) => {
+                      const status = record.exitTime ? "Salida registrada" : "En plantel";
+                      return (
+                        <div className="teacher-overview-row" key={record.id}>
+                          <div><span className="avatar">{record.teacher.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><span><strong>{record.teacher}</strong><small>{formatDate(record.date)}</small></span></div>
+                          <span>{record.entryTime} h</span>
+                          <span>{record.exitTime ? `${record.exitTime} h` : "—"}</span>
+                          <span className={`teacher-status ${status === "En plantel" ? "present" : "left"}`}><i></i>{status}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </>
   );
 }
@@ -1007,6 +1061,7 @@ function VisitorRegistry({
   currentUserId,
   currentUserName,
   currentUserRole,
+  groupMode,
 }: {
   visitors: Visitor[];
   setVisitors: React.Dispatch<React.SetStateAction<Visitor[]>>;
@@ -1016,6 +1071,7 @@ function VisitorRegistry({
   currentUserId: string;
   currentUserName: string;
   currentUserRole: Role;
+  groupMode: GroupMode;
 }) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -1126,9 +1182,14 @@ function VisitorRegistry({
   const filteredVisitors = visitors.filter((visitor) =>
     `${visitor.name} ${visitor.identification} ${visitor.host}`.toLowerCase().includes(search.toLowerCase()),
   );
+  const groupedVisitors = useMemo(
+    () => groupByPeriod(filteredVisitors, (visitor) => `${visitor.date}T${visitor.entryTime || "00:00"}:00`, groupMode),
+    [filteredVisitors, groupMode],
+  );
   const exportVisitorsCSV = () => {
     const escapeCell = (value: string) => `"${sanitizeCsvCell(value).replaceAll("\"", "\"\"")}"`;
-    const rows = filteredVisitors.map((visitor) => [
+    const rows = groupedVisitors.flatMap((group) => group.items.map((visitor) => [
+      group.label,
       visitor.name,
       visitor.host,
       visitor.authorizationStatus,
@@ -1137,8 +1198,8 @@ function VisitorRegistry({
       visitor.date,
       visitor.entryTime,
       visitor.exitTime ?? "",
-    ].map(escapeCell).join(","));
-    const csv = ["Persona,Persona o área visitada,Estado,Autorizó,Fecha y hora de autorización,Fecha,Entrada,Salida", ...rows].join("\n");
+    ].map(escapeCell).join(",")));
+    const csv = ["Grupo,Persona,Persona o área visitada,Estado,Autorizó,Fecha y hora de autorización,Fecha,Entrada,Salida", ...rows].join("\n");
     downloadBlob(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }), "reporte-visitas.csv");
   };
   const activeCount = visitors.filter((visitor) => !visitor.exitTime).length;
@@ -1186,25 +1247,38 @@ function VisitorRegistry({
           </div>
           <div className="visitor-table">
             <div className="visitor-table-head"><span>Persona</span><span>Destino</span><span>Entrada</span><span>Salida</span></div>
-            {filteredVisitors.map((visitor) => <div className="visitor-row" key={visitor.id}>
-              <div><span className="avatar">{visitor.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><span><strong>{visitor.name}</strong><small>{visitor.identification} · {visitor.reason}</small></span></div>
-              <span>{visitor.host}</span>
-              <span><strong>{visitor.entryTime}</strong><small>{formatDate(visitor.date)}</small></span>
-              <span>{visitor.exitTime ? <span className="exit-time">{visitor.exitTime}</span> : readOnly ? <span className="inside-status">En plantel</span> : <button className="exit-button" onClick={() => registerExit(visitor)} disabled={isPending}>Registrar salida</button>}</span>
-              <span className={`presence-badge ${visitor.authorizationStatus === "Autorizada" ? "completed" : ""}`}>{visitor.authorizationStatus}</span>
-              {visitor.authorizedByName && <small>Autorizó: {visitor.authorizedByName}</small>}
-              {canAuthorizeVisitor(visitor) && (
-                <div className="user-access-actions">
-                  <button className="reset-password-button" type="button" onClick={() => authorizeVisitor(visitor, "Autorizada")} disabled={isPending}><Icon name="check" size={15} /> Autorizar</button>
-                  <button className="delete-button" type="button" onClick={() => authorizeVisitor(visitor, "Rechazada")} disabled={isPending}><Icon name="close" size={15} /> Rechazar</button>
+            {groupedVisitors.map((group) => (
+              <div className="grouped-block" key={group.key}>
+                <div className="grouped-header">
+                  <strong>{group.label}</strong>
+                  <span className="grouped-count">{group.count} {group.count === 1 ? "visita" : "visitas"}</span>
+                  {groupMode !== "dia" && (
+                    <span className="grouped-summary">
+                      {group.count} {group.count === 1 ? "visita" : "visitas"} · {group.items.filter((visitor) => visitor.exitTime).length} con salida
+                    </span>
+                  )}
                 </div>
-              )}
-              {canDelete && visitor.exitTime && (
-                <button className="delete-button" onClick={() => handleDeleteVisitor(visitor)} disabled={isPending} aria-label={`Eliminar registro de ${visitor.name}`}>
-                  <Icon name="trash" size={16} />
-                </button>
-              )}
-            </div>)}
+                {group.items.map((visitor) => <div className="visitor-row" key={visitor.id}>
+                  <div><span className="avatar">{visitor.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><span><strong>{visitor.name}</strong><small>{visitor.identification} · {visitor.reason}</small></span></div>
+                  <span>{visitor.host}</span>
+                  <span><strong>{visitor.entryTime}</strong><small>{formatDate(visitor.date)}</small></span>
+                  <span>{visitor.exitTime ? <span className="exit-time">{visitor.exitTime}</span> : readOnly ? <span className="inside-status">En plantel</span> : <button className="exit-button" onClick={() => registerExit(visitor)} disabled={isPending}>Registrar salida</button>}</span>
+                  <span className={`presence-badge ${visitor.authorizationStatus === "Autorizada" ? "completed" : ""}`}>{visitor.authorizationStatus}</span>
+                  {visitor.authorizedByName && <small>Autorizó: {visitor.authorizedByName}</small>}
+                  {canAuthorizeVisitor(visitor) && (
+                    <div className="user-access-actions">
+                      <button className="reset-password-button" type="button" onClick={() => authorizeVisitor(visitor, "Autorizada")} disabled={isPending}><Icon name="check" size={15} /> Autorizar</button>
+                      <button className="delete-button" type="button" onClick={() => authorizeVisitor(visitor, "Rechazada")} disabled={isPending}><Icon name="close" size={15} /> Rechazar</button>
+                    </div>
+                  )}
+                  {canDelete && visitor.exitTime && (
+                    <button className="delete-button" onClick={() => handleDeleteVisitor(visitor)} disabled={isPending} aria-label={`Eliminar registro de ${visitor.name}`}>
+                      <Icon name="trash" size={16} />
+                    </button>
+                  )}
+                </div>)}
+              </div>
+            ))}
             {filteredVisitors.length === 0 && <div className="empty-state"><Icon name="badge" /><strong>Sin registros</strong><p>No hay personas que coincidan con la búsqueda.</p></div>}
           </div>
         </section>
@@ -2568,6 +2642,7 @@ function OfficialListsArchive({
   replaceOfficialLists,
   directorName,
   dateRange,
+  groupMode,
 }: {
   officialLists: OfficialAttendanceList[];
   groups: string[];
@@ -2575,6 +2650,7 @@ function OfficialListsArchive({
   replaceOfficialLists: (lists: OfficialAttendanceList[]) => void;
   directorName: string;
   dateRange?: DateRange;
+  groupMode: GroupMode;
 }) {
   const router = useRouter();
   const filteredLists = dateRange
@@ -2604,6 +2680,11 @@ function OfficialListsArchive({
   }, [groupLists, month]);
 
   const selectedList = groupLists.find((list) => list.month === month);
+  const groupedDates = useMemo(() => {
+    if (!selectedList) return [];
+    const entries = selectedList.officialDates.map((date) => ({ date }));
+    return groupByPeriod(entries, (entry) => entry.date, groupMode);
+  }, [selectedList, groupMode]);
 
   const openCorrection = async (date: string) => {
     if (!selectedList) return;
@@ -2691,11 +2772,26 @@ function OfficialListsArchive({
         <section className="panel official-list-controls">
           <div style={{ gridColumn: "1 / -1" }}>
             <small>CORREGIR ASISTENCIA POR FECHA</small>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
-              {selectedList.officialDates.map((date) => (
-                <button key={date} type="button" className="secondary-button" onClick={() => openCorrection(date)} disabled={isPending}>
-                  <Icon name="calendar" size={16} /> {formatDate(date)}
-                </button>
+            <div className="grouped-list" style={{ marginTop: "0.5rem" }}>
+              {groupedDates.map((group) => (
+                <div className="grouped-block" key={group.key}>
+                  <div className="grouped-header">
+                    <strong>{group.label}</strong>
+                    <span className="grouped-count">{group.count} {group.count === 1 ? "día" : "días"}</span>
+                    {groupMode !== "dia" && (
+                      <span className="grouped-summary">
+                        {group.items.filter((entry) => selectedList.marks && Object.values(selectedList.marks).some((marks) => marks[entry.date] === "X")).length} faltas · {group.items.filter((entry) => selectedList.marks && Object.values(selectedList.marks).some((marks) => marks[entry.date] === ".")).length} asistencias
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {group.items.map((entry) => (
+                      <button key={entry.date} type="button" className="secondary-button" onClick={() => openCorrection(entry.date)} disabled={isPending}>
+                        <Icon name="calendar" size={16} /> {formatDate(entry.date)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -3398,6 +3494,7 @@ function Reports({
   groups,
   assignments,
   allowedGroups,
+  groupMode,
 }: {
   records: AttendanceRecord[];
   students: Student[];
@@ -3405,6 +3502,7 @@ function Reports({
   assignments: Record<string, string[]>;
   allowedGroups?: string[];
   initialTemplates: ReportTemplate[];
+  groupMode: GroupMode;
 }) {
   const availableGroups = (allowedGroups || [...new Set([...groups, ...students.map((student) => student.group)])]).slice().sort();
   const [selectedGroup, setSelectedGroup] = useState(availableGroups[0] || "");
@@ -3490,6 +3588,16 @@ function Reports({
     downloadBlob(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }), `asistencia-${selectedGroup || "grupo"}-${periodRange.startDate}-${periodRange.endDate}.csv`);
   };
 
+  const groupedRows = useMemo(() => {
+    if (groupMode === "dia") return null;
+    const entries = displayedRows.flatMap((row) =>
+      records
+        .filter((record) => record.studentId === row.id && record.date >= periodRange.startDate && record.date <= periodRange.endDate)
+        .map((record) => ({ record, row })),
+    );
+    return groupByPeriod(entries, (entry) => entry.record.date, groupMode);
+  }, [displayedRows, groupMode, periodRange.endDate, periodRange.startDate, records]);
+
   return (
     <>
       <div className="page-intro report-intro">
@@ -3542,6 +3650,29 @@ function Reports({
           {displayedRows.length === 0 && <div className="empty-state"><Icon name="search" /><strong>Sin alumnos coincidentes</strong><p>Prueba con otro nombre o limpia la búsqueda.</p></div>}
         </div>
       </section> : <section className="panel empty-state"><Icon name="users" /><strong>No hay grupos disponibles</strong><p>Registra o asigna un grupo antes de consultar reportes.</p></section>}
+      {groupedRows && groupedRows.length > 0 && (
+        <section className="panel group-report-card">
+          <div className="group-report-header">
+            <div className="group-report-title"><span>{groupMode === "mes" ? "M" : "A"}</span><div><p className="eyebrow">RESUMEN AGRUPADO</p><h2>Registros por {groupMode === "mes" ? "mes" : "año"}</h2></div></div>
+          </div>
+          <div className="grouped-list">
+            {groupedRows.map((group) => {
+              const present = group.items.filter((entry) => entry.record.status === "Presente").length;
+              const late = group.items.filter((entry) => entry.record.status === "Retardo").length;
+              const absent = group.items.filter((entry) => entry.record.status === "Falta").length;
+              return (
+                <div className="grouped-block" key={group.key}>
+                  <div className="grouped-header">
+                    <strong>{group.label}</strong>
+                    <span className="grouped-count">{group.count} {group.count === 1 ? "registro" : "registros"}</span>
+                    <span className="grouped-summary">{present} asistencias · {late} retardos · {absent} faltas</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </>
   );
 }

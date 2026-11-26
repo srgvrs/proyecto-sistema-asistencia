@@ -1126,7 +1126,7 @@ type RangeDataResult = {
 
 const RANGE_PAGE_SIZE = 500
 const RANGE_MAX_PAGES = 20
-const MAX_RANGE_DAYS = 366
+const MAX_RANGE_DAYS = 800
 
 const daysBetweenInclusive = (desde: string, hasta: string): number => {
   const start = new Date(`${desde}T00:00:00Z`).valueOf()
